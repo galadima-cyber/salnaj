@@ -18,13 +18,18 @@ import { AuthRequest, JwtPayload } from '../types'
 // ─── Token helpers ────────────────────────────────────────────
 
 function signTokens(payload: JwtPayload) {
-  const access = jwt.sign(payload, env.JWT_SECRET, {
-  expiresIn: env.JWT_EXPIRES_IN,
-} as SignOptions);
+  const cleanPayload = {
+    userId: payload.userId,
+    email:  payload.email,
+    role:   payload.role,
+  }
+  const access = jwt.sign(cleanPayload, env.JWT_SECRET, {
+    expiresIn: env.JWT_EXPIRES_IN,
+  } as SignOptions)
 
-const refresh = jwt.sign(payload, env.JWT_REFRESH_SECRET, {
-  expiresIn: env.JWT_REFRESH_EXPIRES_IN,
-} as SignOptions);
+  const refresh = jwt.sign(cleanPayload, env.JWT_REFRESH_SECRET, {
+    expiresIn: env.JWT_REFRESH_EXPIRES_IN,
+  } as SignOptions)
   return { access, refresh }
 }
 
@@ -76,7 +81,7 @@ export async function register(req: Request, res: Response): Promise<void> {
     return created
   })
 
-  // Send email OTP
+  // Send email OTP (don't block registration if SMTP times out)
   const otp = generateOtp()
   await prisma.otp.create({
     data: {
@@ -86,7 +91,7 @@ export async function register(req: Request, res: Response): Promise<void> {
       expiresAt: getOtpExpiry(10),
     },
   })
-  await emailService.sendOtp(email, fullName, otp, 'EMAIL_VERIFY')
+  emailService.sendOtp(email, fullName, otp, 'EMAIL_VERIFY').catch(() => {})
 
   // Welcome email (don't await — fire and forget)
   emailService.sendWelcome(email, fullName).catch(() => {})

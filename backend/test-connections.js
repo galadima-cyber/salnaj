@@ -35,7 +35,7 @@ async function testPostgres() {
   try {
     // Use Prisma to test connection
     const result = execSync(
-      'npx prisma db execute --stdin <<< "SELECT 1 as ok"',
+      `node -e "const{PrismaClient}=require('@prisma/client');const p=new PrismaClient();p.$queryRaw\`SELECT 1 as ok\`.then(()=>{console.log('ok');p.$disconnect()}).catch(e=>{console.error(e.message);process.exit(1)})"`,
       { stdio: ['pipe', 'pipe', 'pipe'], timeout: 10000 }
     ).toString()
     pass('Database connection successful')
@@ -189,14 +189,18 @@ async function testTermii() {
 async function testEmail() {
   console.log('\n─── Email (SMTP) ───────────────────────────')
   const user = process.env.SMTP_USER
-  const pass = process.env.SMTP_PASS
-  if (!user || !pass) { fail('SMTP_USER or SMTP_PASS not set'); return }
+  const smtpPass = process.env.SMTP_PASS
+  const host = process.env.SMTP_HOST || 'smtp.gmail.com'
+  const port = parseInt(process.env.SMTP_PORT || '587')
+  const secure = process.env.SMTP_SECURE === 'true'
+
+  if (!user || !smtpPass) { fail('SMTP_USER or SMTP_PASS not set'); return }
 
   try {
     execSync(
       `node -e "
         const n=require('nodemailer');
-        const t=n.createTransport({host:'smtp.gmail.com',port:587,secure:false,auth:{user:'${user}',pass:'${pass}'}});
+        const t=n.createTransport({host:'${host}',port:${port},secure:${secure},auth:{user:'${user}',pass:'${smtpPass}'}});
         t.verify().then(()=>{console.log('ok');process.exit(0)}).catch(e=>{console.error(e.message);process.exit(1)})
       "`,
       { stdio: ['pipe', 'pipe', 'pipe'], timeout: 12000 }

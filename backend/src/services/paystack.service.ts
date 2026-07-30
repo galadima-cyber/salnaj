@@ -78,11 +78,17 @@ class PaystackService {
 
   /**
    * Verify Paystack webhook signature
-   * CRITICAL: always validate before processing
+   * CRITICAL: always validate before processing (uses HMAC SHA512)
    */
-  verifyWebhookSignature(rawBody: string, signature: string): boolean {
-    if (!env.PAYSTACK_SECRET_KEY) return false
-    const expected = sha256(rawBody, env.PAYSTACK_SECRET_KEY)
+  verifyWebhookSignature(rawBody: string | Buffer, signature: string): boolean {
+    if (!env.PAYSTACK_SECRET_KEY || !signature) return false
+    const crypto = require('crypto')
+    const bodyStr = Buffer.isBuffer(rawBody)
+      ? rawBody.toString('utf-8')
+      : typeof rawBody === 'string'
+      ? rawBody
+      : JSON.stringify(rawBody)
+    const expected = crypto.createHmac('sha512', env.PAYSTACK_SECRET_KEY).update(bodyStr).digest('hex')
     return expected === signature
   }
 

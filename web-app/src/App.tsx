@@ -21,6 +21,7 @@ const BettingPage      = lazy(() => import('@/pages/services/BettingPage'))
 const BulkSmsPage      = lazy(() => import('@/pages/services/BulkSmsPage'))
 const GiftDataPage     = lazy(() => import('@/pages/services/GiftDataPage'))
 const WalletPage       = lazy(() => import('@/pages/wallet/WalletPage'))
+const WalletCallbackPage = lazy(() => import('@/pages/wallet/WalletCallbackPage'))
 const ReferralPage     = lazy(() => import('@/pages/referral/ReferralPage'))
 const AnalyticsPage    = lazy(() => import('@/pages/analytics/AnalyticsPage'))
 const ProfilePage      = lazy(() => import('@/pages/profile/ProfilePage'))
@@ -134,7 +135,8 @@ function AppRouter() {
         <Route path="/api-access"     element={<RequireAuth><ProfilePage /></RequireAuth>} />
 
         {/* Wallet & account */}
-        <Route path="/wallet"     element={<RequireAuth><WalletPage /></RequireAuth>} />
+        <Route path="/wallet" element={<RequireAuth><WalletPage /></RequireAuth>} />
+        <Route path="/wallet/fund/callback" element={<RequireAuth><WalletCallbackPage /></RequireAuth>} />
         <Route path="/referrals"  element={<RequireAuth><ReferralPage /></RequireAuth>} />
 
         {/* Admin */}

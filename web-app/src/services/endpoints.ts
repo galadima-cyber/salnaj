@@ -126,6 +126,11 @@ export const walletApi = {
       authorizationUrl: string; reference: string; amount: number
     } }>('/wallet/fund/initiate', { amount }),
 
+  verifyFunding: (reference: string) =>
+    api.post<{ success: boolean; message: string; data: { status: string; balance: number } }>(
+      '/wallet/fund/verify', { reference }
+    ),
+
   getHistory: (page = 1, limit = 20) =>
     api.get(`/wallet/history?page=${page}&limit=${limit}`),
 }

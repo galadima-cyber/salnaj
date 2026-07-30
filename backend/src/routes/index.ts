@@ -102,6 +102,10 @@ walletRouter.post('/fund/initiate',
   asyncHandler(WalletCtrl.initiateFunding)
 )
 
+walletRouter.post('/fund/verify',
+  asyncHandler(WalletCtrl.verifyFunding)
+)
+
 walletRouter.get('/history',
   asyncHandler(WalletCtrl.getWalletHistory)
 )
