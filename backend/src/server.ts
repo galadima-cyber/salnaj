@@ -33,6 +33,7 @@ app.use(cors({
       env.FRONTEND_URL,
       'http://localhost:5173',
       'http://localhost:5174',
+      'https://salnaj-d7t4.vercel.app/login',
       'http://localhost:3000',
     ]
     // Allow requests with no origin (mobile apps, Postman)
