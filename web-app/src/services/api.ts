@@ -1,7 +1,18 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { tokenUtils } from '@/utils/token'
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const getApiUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL
+  if (envUrl && envUrl.trim() !== '') {
+    return envUrl.trim().replace(/\/+$/, '')
+  }
+  if (import.meta.env.DEV) {
+    return 'http://localhost:5000/api'
+  }
+  return 'https://salnaj-production.up.railway.app/api'
+}
+
+const BASE_URL = getApiUrl()
 
 export const api = axios.create({
   baseURL: BASE_URL,
