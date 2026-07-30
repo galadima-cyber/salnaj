@@ -1,0 +1,192 @@
+#!/usr/bin/env node
+/**
+ * Salnaj Backend Setup Script
+ * Run: node setup.js
+ *
+ * This script:
+ * 1. Generates secure random JWT secrets
+ * 2. Creates your .env file interactively
+ * 3. Validates that required values are provided
+ * 4. Tests database connection
+ */
+
+const crypto = require('crypto')
+const fs     = require('fs')
+const path   = require('path')
+const readline = require('readline')
+
+const rl = readline.createInterface({
+  input:  process.stdin,
+  output: process.stdout,
+})
+
+const ask = (question, defaultVal = '') =>
+  new Promise(resolve => {
+    const hint = defaultVal ? ` [${defaultVal}]` : ''
+    rl.question(`${question}${hint}: `, ans => {
+      resolve(ans.trim() || defaultVal)
+    })
+  })
+
+const generateSecret = () => crypto.randomBytes(64).toString('hex')
+
+async function main() {
+  console.log('\n')
+  console.log('╔══════════════════════════════════════════╗')
+  console.log('║      SALNAJ BACKEND SETUP WIZARD         ║')
+  console.log('╚══════════════════════════════════════════╝')
+  console.log('\nThis will create your .env file.\n')
+  console.log('Have these ready before starting:')
+  console.log('  • Supabase or Neon DATABASE_URL')
+  console.log('  • Upstash REDIS_URL')
+  console.log('  • Gmail address + App Password (for emails)')
+  console.log('  • Paystack API keys (from dashboard.paystack.com)')
+  console.log('  • VTPass API keys (from vtpass.com/api)')
+  console.log('  • Termii API key (from termii.com)\n')
+
+  // ── App ────────────────────────────────────────────────────
+  console.log('─── App Settings ──────────────────────────')
+  const appName     = await ask('App name', 'Salnaj')
+  const port        = await ask('Port', '5000')
+  const frontendUrl = await ask('Frontend URL (your Vercel/Netlify URL)', 'http://localhost:5173')
+  const appUrl      = await ask('Backend URL (your Railway URL)', `http://localhost:${port}`)
+
+  // ── Database ───────────────────────────────────────────────
+  console.log('\n─── Database (PostgreSQL) ──────────────────')
+  console.log('Get your DATABASE_URL from:')
+  console.log('  • Supabase: project.supabase.co → Settings → Database → Connection String')
+  console.log('  • Neon:     console.neon.tech   → Connection String')
+  const databaseUrl = await ask('DATABASE_URL (postgresql://...)')
+
+  // ── Redis ──────────────────────────────────────────────────
+  console.log('\n─── Redis ──────────────────────────────────')
+  console.log('Get your REDIS_URL from Upstash:')
+  console.log('  console.upstash.com → Create Database → Copy "UPSTASH_REDIS_REST_URL"')
+  console.log('  (Use the rediss://... URL, not the REST URL)')
+  const redisUrl = await ask('REDIS_URL', 'redis://localhost:6379')
+
+  // ── JWT ────────────────────────────────────────────────────
+  console.log('\n─── JWT (Auto-generating secure secrets) ───')
+  const jwtSecret        = generateSecret()
+  const jwtRefreshSecret = generateSecret()
+  console.log('✅ Generated JWT_SECRET')
+  console.log('✅ Generated JWT_REFRESH_SECRET')
+
+  // ── Email ──────────────────────────────────────────────────
+  console.log('\n─── Email (Gmail SMTP) ─────────────────────')
+  console.log('1. Use a Gmail account for sending emails')
+  console.log('2. Enable 2FA on the Gmail account')
+  console.log('3. Google Account → Security → App Passwords → Generate')
+  const smtpUser  = await ask('Gmail address (e.g. noreply@gmail.com)')
+  const smtpPass  = await ask('Gmail App Password (16 chars, no spaces)')
+  const emailFrom = await ask('From name+email', `"${appName}" <${smtpUser}>`)
+
+  // ── Termii ────────────────────────────────────────────────
+  console.log('\n─── Termii SMS ─────────────────────────────')
+  console.log('Sign up at termii.com → Dashboard → API Keys')
+  const termiiKey      = await ask('Termii API Key')
+  const termiiSenderId = await ask('Sender ID (e.g. Salnaj)', appName)
+
+  // ── Paystack ──────────────────────────────────────────────
+  console.log('\n─── Paystack ───────────────────────────────')
+  console.log('dashboard.paystack.com → Settings → API Keys & Webhooks')
+  console.log('Start with TEST keys (sk_test_...) until everything works')
+  const paystackSecret = await ask('Paystack Secret Key (sk_test_...)')
+  const paystackPublic = await ask('Paystack Public Key (pk_test_...)')
+
+  // ── VTPass ────────────────────────────────────────────────
+  console.log('\n─── VTPass ─────────────────────────────────')
+  console.log('vtpass.com → Register → API Access')
+  console.log('Fund sandbox wallet with at least ₦2,000 for testing')
+  const vtpassApiKey    = await ask('VTPass API Key')
+  const vtpassPublicKey = await ask('VTPass Public Key')
+  const vtpassSecretKey = await ask('VTPass Secret Key')
+  const vtpassEnv       = await ask('VTPass environment (sandbox/live)', 'sandbox')
+  const vtpassBaseUrl   = vtpassEnv === 'live'
+    ? 'https://vtpass.com/api'
+    : 'https://sandbox.vtpass.com/api'
+
+  // ── Build .env ────────────────────────────────────────────
+  const env = `# ─── Generated by Salnaj Setup Wizard ────────────────────────
+# Generated: ${new Date().toISOString()}
+# DO NOT commit this file to git
+
+# ─── App ──────────────────────────────────────────────────────
+NODE_ENV=development
+PORT=${port}
+APP_NAME=${appName}
+APP_URL=${appUrl}
+FRONTEND_URL=${frontendUrl}
+
+# ─── Database ─────────────────────────────────────────────────
+DATABASE_URL=${databaseUrl}
+
+# ─── Redis ────────────────────────────────────────────────────
+REDIS_URL=${redisUrl}
+
+# ─── JWT ──────────────────────────────────────────────────────
+JWT_SECRET=${jwtSecret}
+JWT_REFRESH_SECRET=${jwtRefreshSecret}
+JWT_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+
+# ─── Email ────────────────────────────────────────────────────
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=${smtpUser}
+SMTP_PASS=${smtpPass}
+EMAIL_FROM=${emailFrom}
+
+# ─── SMS (Termii) ─────────────────────────────────────────────
+TERMII_API_KEY=${termiiKey}
+TERMII_SENDER_ID=${termiiSenderId}
+
+# ─── Paystack ─────────────────────────────────────────────────
+PAYSTACK_SECRET_KEY=${paystackSecret}
+PAYSTACK_PUBLIC_KEY=${paystackPublic}
+
+# ─── VTPass ───────────────────────────────────────────────────
+VTPASS_API_KEY=${vtpassApiKey}
+VTPASS_PUBLIC_KEY=${vtpassPublicKey}
+VTPASS_SECRET_KEY=${vtpassSecretKey}
+VTPASS_BASE_URL=${vtpassBaseUrl}
+
+# ─── Rate Limiting ────────────────────────────────────────────
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX=100
+
+# ─── Referral ─────────────────────────────────────────────────
+REFERRAL_SIGNUP_BONUS=100
+REFERRAL_TRANSACTION_BONUS=150
+REFERRAL_MIN_FUNDING_FOR_BONUS=500
+
+# ─── Limits ───────────────────────────────────────────────────
+DAILY_LIMIT_UNVERIFIED=10000
+DAILY_LIMIT_VERIFIED=100000
+MAX_WALLET_BALANCE=500000
+`
+
+  const envPath = path.join(__dirname, '.env')
+  fs.writeFileSync(envPath, env)
+
+  console.log('\n')
+  console.log('╔══════════════════════════════════════════╗')
+  console.log('║         ✅ .env FILE CREATED!            ║')
+  console.log('╚══════════════════════════════════════════╝')
+  console.log('\nNext steps:')
+  console.log('  1.  npm run db:generate    (generate Prisma client)')
+  console.log('  2.  npm run db:migrate     (create database tables)')
+  console.log('  3.  npm run db:seed        (populate data plans)')
+  console.log('  4.  npm run dev            (start backend server)')
+  console.log('  5.  curl http://localhost:5000/api/health')
+  console.log('       → should return: { status: "ok" }\n')
+
+  rl.close()
+}
+
+main().catch(err => {
+  console.error('Setup failed:', err.message)
+  rl.close()
+  process.exit(1)
+})

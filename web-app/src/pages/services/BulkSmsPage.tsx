@@ -4,7 +4,7 @@ import { MessageSquare, Upload, X, Send, Users, AlertCircle } from 'lucide-react
 import { DashLayout }   from '@/components/layout/DashLayout'
 import { PinModal }     from '@/components/ui/PinModal'
 import { ReceiptModal } from '@/components/ui/ReceiptModal'
-import { useAuthStore } from '@/store/auth.store'
+import { useAuth } from '@/context/AuthContext'
 import { formatNaira }  from '@/utils'
 
 const SMS_PRICE_PER_UNIT = 4    // ₦4 per SMS
@@ -12,7 +12,7 @@ const MAX_SMS_LENGTH     = 160
 const MAX_RECIPIENTS     = 5000
 
 export default function BulkSmsPage() {
-  const { balance, fetchBalance } = useAuthStore()
+  const { balance, refreshBalance } = useAuth()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [senderId,    setSenderId]    = useState('Salnaj')
@@ -78,7 +78,7 @@ export default function BulkSmsPage() {
     // TODO: wire to real bulk SMS API
     await new Promise(r => setTimeout(r, 1500))
     setPinOpen(false)
-    fetchBalance()
+    refreshBalance()
     setReceipt({ open: true, status: 'success', ref: `SNJ-SMS-${Date.now()}` })
   }
 

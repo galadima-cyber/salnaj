@@ -5,7 +5,7 @@ import {
   TrendingUp, ChevronRight, Sparkles,
 } from 'lucide-react'
 import { DashLayout }   from '@/components/layout/DashLayout'
-import { useAuthStore } from '@/store/auth.store'
+import { useAuth } from '@/context/AuthContext'
 import { brandConfig }  from '@/config/brand.config'
 import { formatNaira }  from '@/utils'
 
@@ -23,7 +23,7 @@ const HOW_IT_WORKS = [
 ]
 
 export default function ReferralPage() {
-  const { user } = useAuthStore()
+  const { user } = useAuth()
   const [copied, setCopied] = useState(false)
 
   const referralCode = user?.referralCode || 'SNJ-XXXXX'

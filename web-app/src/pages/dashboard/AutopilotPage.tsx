@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Calendar, Plus, Zap, X, Clock, CheckCircle2, Pause, Trash2 } from 'lucide-react'
 import { DashLayout }   from '@/components/layout/DashLayout'
-import { useAuthStore } from '@/store/auth.store'
+import { useAuth } from '@/context/AuthContext'
 import { formatNaira }  from '@/utils'
 
 // Mock schedules — replace with real API
@@ -30,7 +30,7 @@ interface NewSchedule {
 }
 
 export default function AutopilotPage() {
-  const { balance } = useAuthStore()
+  const { balance } = useAuth()
   const [schedules,   setSchedules]  = useState(MOCK_SCHEDULES)
   const [showForm,    setShowForm]   = useState(false)
   const [form,        setForm]       = useState<NewSchedule>({

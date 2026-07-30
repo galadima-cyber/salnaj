@@ -5,8 +5,9 @@ import { DashLayout }   from '@/components/layout/DashLayout'
 import { PinModal }     from '@/components/ui/PinModal'
 import { ReceiptModal } from '@/components/ui/ReceiptModal'
 import { cableApi, DecoderInfo } from '@/services/endpoints'
-import { useAuthStore } from '@/store/auth.store'
+import { useAuth } from '@/context/AuthContext'
 import { getErrorMessage } from '@/services/api'
+import { useToast } from '@/components/ui/Toast'
 import { formatNaira }  from '@/utils'
 
 const PROVIDERS = [
@@ -45,7 +46,8 @@ const PROVIDERS = [
 ]
 
 export default function CableTvPage() {
-  const { balance, fetchBalance } = useAuthStore()
+  const { balance, refreshBalance } = useAuth()
+  const toast = useToast()
 
   const [provider,      setProvider]    = useState('dstv')
   const [decoder,       setDecoder]     = useState('')
@@ -86,7 +88,7 @@ export default function CableTvPage() {
     setPinOpen(false)
     const ok = res.data.data?.status === 'SUCCESS'
     setReceipt({ open: true, status: ok ? 'success' : 'failed', ref: res.data.data?.reference || '' })
-    if (ok) fetchBalance()
+    if (ok) refreshBalance()
   }
 
   return (

@@ -154,7 +154,7 @@ export default function AnalyticsPage() {
                     <Cell key={i} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v: number) => formatNaira(v)} />
+                <Tooltip formatter={(v: any) => formatNaira(Number(v) || 0)} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -231,7 +231,7 @@ export default function AnalyticsPage() {
                      axisLine={false} tickLine={false} tickFormatter={v => `₦${(v / 1000).toFixed(0)}k`} />
               <YAxis type="category" dataKey="name" tick={{ fill: 'var(--color-text-muted)', fontSize: 12 }}
                      axisLine={false} tickLine={false} width={50} />
-              <Tooltip formatter={(v: number) => formatNaira(v)} />
+              <Tooltip formatter={(v: any) => formatNaira(Number(v) || 0)} />
               <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={32}>
                 {NETWORK_BREAKDOWN.map((entry, i) => (
                   <Cell key={i} fill={entry.color} />

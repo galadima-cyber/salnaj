@@ -5,8 +5,9 @@ import { DashLayout }   from '@/components/layout/DashLayout'
 import { PinModal }     from '@/components/ui/PinModal'
 import { ReceiptModal } from '@/components/ui/ReceiptModal'
 import { bettingApi }   from '@/services/endpoints'
-import { useAuthStore } from '@/store/auth.store'
+import { useAuth } from '@/context/AuthContext'
 import { getErrorMessage } from '@/services/api'
+import { useToast } from '@/components/ui/Toast'
 import { formatNaira }  from '@/utils'
 
 const PLATFORMS = [
@@ -21,7 +22,8 @@ const PLATFORMS = [
 const PRESETS = [500, 1000, 2000, 5000, 10000]
 
 export default function BettingPage() {
-  const { balance, fetchBalance } = useAuthStore()
+  const { balance, refreshBalance } = useAuth()
+  const toast = useToast()
 
   const [platform,   setPlatform]  = useState('bet9ja')
   const [userId,     setUserId]    = useState('')
@@ -65,7 +67,7 @@ export default function BettingPage() {
     setPinOpen(false)
     const ok = res.data.data?.status === 'SUCCESS'
     setReceipt({ open: true, status: ok ? 'success' : 'failed', ref: res.data.data?.reference || '' })
-    if (ok) fetchBalance()
+    if (ok) refreshBalance()
   }
 
   return (

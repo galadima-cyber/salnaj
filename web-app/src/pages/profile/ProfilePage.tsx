@@ -6,7 +6,7 @@ import {
   Smartphone, Lock, KeyRound,
 } from 'lucide-react'
 import { DashLayout }   from '@/components/layout/DashLayout'
-import { useAuthStore } from '@/store/auth.store'
+import { useAuth } from '@/context/AuthContext'
 import { authApi }      from '@/services/endpoints'
 import { getErrorMessage } from '@/services/api'
 
@@ -67,7 +67,7 @@ function SettingRow({
 }
 
 export default function ProfilePage() {
-  const { user, logout, fetchMe } = useAuthStore()
+  const { user, logout, updateUser } = useAuth()
   const [tab, setTab] = useState('profile')
 
   // Profile form state
@@ -98,7 +98,7 @@ export default function ProfilePage() {
     try {
       // TODO: call PATCH /api/users/me
       await new Promise(r => setTimeout(r, 800))
-      await fetchMe()
+      updateUser({ fullName: name })
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch (e) { setSaveError(getErrorMessage(e)) }
@@ -117,12 +117,13 @@ export default function ProfilePage() {
     finally { setPinSaving(false) }
   }
 
-  const kycBadge = {
+  const kycBadgeMap: Record<string, { label: string; color: string; bg: string }> = {
     UNVERIFIED:    { label: 'Unverified',    color: 'var(--color-warning)',  bg: 'var(--color-warning-subtle)' },
     PHONE_VERIFIED:{ label: 'Phone Verified',color: 'var(--color-info)',     bg: 'var(--color-info-subtle)'    },
     BVN_VERIFIED:  { label: 'BVN Verified',  color: 'var(--color-secondary)',bg: 'var(--color-success-subtle)' },
     FULL_KYC:      { label: 'Fully Verified',color: 'var(--color-secondary)',bg: 'var(--color-success-subtle)' },
-  }[user?.kycStatus || 'UNVERIFIED']
+  }
+  const kycBadge = kycBadgeMap[user?.kycStatus || 'UNVERIFIED'] || kycBadgeMap.UNVERIFIED
 
   return (
     <DashLayout>

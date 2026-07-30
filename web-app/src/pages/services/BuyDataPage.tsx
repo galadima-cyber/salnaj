@@ -6,7 +6,8 @@ import { PinModal }      from '@/components/ui/PinModal'
 import { ReceiptModal }  from '@/components/ui/ReceiptModal'
 import { dataApi, DataPlan, SmartBuyResult } from '@/services/endpoints'
 import { getErrorMessage } from '@/services/api'
-import { useAuthStore }  from '@/store/auth.store'
+import { useToast } from '@/components/ui/Toast'
+import { useAuth } from '@/context/AuthContext'
 import { formatNaira }   from '@/utils'
 
 const NETWORKS = [
@@ -19,7 +20,8 @@ const CATEGORIES = ['ALL', 'SME', 'DAILY', 'WEEKLY', 'CORPORATE']
 const TABS = ['Data Plans', 'Smart Buy']
 
 export default function BuyDataPage() {
-  const { balance, fetchBalance } = useAuthStore()
+  const { balance, refreshBalance } = useAuth()
+  const toast = useToast()
 
   const [tab,          setTab]         = useState(0)
   const [network,      setNetwork]     = useState('MTN')
@@ -91,7 +93,12 @@ export default function BuyDataPage() {
     setPinOpen(false)
     const ok = res.data.data?.status === 'SUCCESS'
     setReceipt({ open: true, status: ok ? 'success' : 'failed', ref: res.data.data?.reference || '' })
-    if (ok) { fetchBalance(); setSelected(null) }
+    if (ok) {
+      refreshBalance(); setSelected(null)
+      toast.success('Data Delivered!', `${selectedPlan?.sizeLabel} sent to ${phone}`)
+    } else {
+      toast.error('Transaction Failed', 'Your wallet has been refunded automatically')
+    }
   }
 
   const netObj = NETWORKS.find(n => n.id === network)

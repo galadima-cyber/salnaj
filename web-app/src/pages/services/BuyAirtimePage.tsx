@@ -4,8 +4,9 @@ import { Phone, Zap } from 'lucide-react'
 import { DashLayout }   from '@/components/layout/DashLayout'
 import { PinModal }     from '@/components/ui/PinModal'
 import { ReceiptModal } from '@/components/ui/ReceiptModal'
+import { useToast }     from '@/components/ui/Toast'
 import { airtimeApi }   from '@/services/endpoints'
-import { useAuthStore } from '@/store/auth.store'
+import { useAuth } from '@/context/AuthContext'
 import { formatNaira, detectNetwork } from '@/utils'
 
 const NETWORKS = [
@@ -17,7 +18,8 @@ const NETWORKS = [
 const PRESETS = [50, 100, 200, 500, 1000, 2000]
 
 export default function BuyAirtimePage() {
-  const { balance, fetchBalance } = useAuthStore()
+  const { balance, refreshBalance } = useAuth()
+  const toast = useToast()
   const [network,  setNetwork]  = useState('MTN')
   const [phone,    setPhone]    = useState('')
   const [amount,   setAmount]   = useState('')
@@ -48,7 +50,8 @@ export default function BuyAirtimePage() {
     setPinOpen(false)
     const ok = res.data.data?.status === 'SUCCESS'
     setReceipt({ open: true, status: ok ? 'success' : 'failed', ref: res.data.data?.reference || '' })
-    if (ok) fetchBalance()
+    if (ok) { refreshBalance(); toast.success('Airtime Sent!', `${amount} ${network} airtime delivered`) }
+    else    { toast.error('Transaction Failed', 'Your wallet has been refunded') }
   }
 
   return (

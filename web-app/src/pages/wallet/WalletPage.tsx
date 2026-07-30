@@ -6,8 +6,9 @@ import {
 } from 'lucide-react'
 import { DashLayout }   from '@/components/layout/DashLayout'
 import { walletApi, Transaction } from '@/services/endpoints'
-import { useAuthStore } from '@/store/auth.store'
+import { useAuth } from '@/context/AuthContext'
 import { getErrorMessage } from '@/services/api'
+import { useToast } from '@/components/ui/Toast'
 import { formatNaira }  from '@/utils'
 
 const FUND_PRESETS = [500, 1000, 2000, 5000, 10000, 20000]
@@ -36,7 +37,8 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function WalletPage() {
-  const { balance, fetchBalance } = useAuthStore()
+  const { balance, refreshBalance } = useAuth()
+  const toast = useToast()
 
   const [balanceVisible, setBalanceVisible] = useState(true)
   const [fundAmount,     setFundAmount]     = useState('')
@@ -49,7 +51,7 @@ export default function WalletPage() {
   const [totalPages,     setTotalPages]     = useState(1)
   const [filterStatus,   setFilterStatus]   = useState('all')
 
-  useEffect(() => { fetchBalance() }, [])
+  useEffect(() => { refreshBalance() }, [])
 
   useEffect(() => {
     const load = async () => {

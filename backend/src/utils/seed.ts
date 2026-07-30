@@ -1,104 +1,96 @@
 /**
- * Database seeder — run once after first migration
- * Usage: npx ts-node src/utils/seed.ts
- *
- * Seeds:
- *  - All active data plans (MTN, Airtel, Glo, 9mobile)
- *  - System config defaults
+ * Database Seeder — run: npm run db:seed
+ * Seeds data plans, system config, and a default admin user.
  */
-
-import prisma from '../config/database'
+import prisma     from '../config/database'
 import { logger } from '../config/logger'
+import bcrypt     from 'bcryptjs'
+import fs         from 'fs'
+import path       from 'path'
 
-// ─── Data Plans ───────────────────────────────────────────────
-// Prices set with a markup over typical VTPass wholesale cost.
-// Update providerCode to match your exact VTPass variation codes.
+// ─── Load plans: generated file first, fallback to defaults ───
+let dataPlans: Array<{
+  network: string; name: string; sizeGb: number; sizeLabel: string
+  price: number; validityDays: number; category: string; providerCode: string
+}>
 
-const dataPlans = [
-  // ── MTN ─────────────────────────────────────────────────
-  { network: 'MTN', name: 'MTN 500MB', sizeGb: 0.5,  sizeLabel: '500MB', price: 160,  validityDays: 30,  category: 'SME',       providerCode: 'mtn-10mb-110' },
-  { network: 'MTN', name: 'MTN 1GB',   sizeGb: 1,    sizeLabel: '1GB',   price: 300,  validityDays: 30,  category: 'SME',       providerCode: 'mtn-10mb-111' },
-  { network: 'MTN', name: 'MTN 2GB',   sizeGb: 2,    sizeLabel: '2GB',   price: 580,  validityDays: 30,  category: 'SME',       providerCode: 'mtn-10mb-112' },
-  { network: 'MTN', name: 'MTN 3GB',   sizeGb: 3,    sizeLabel: '3GB',   price: 850,  validityDays: 30,  category: 'SME',       providerCode: 'mtn-10mb-113' },
-  { network: 'MTN', name: 'MTN 5GB',   sizeGb: 5,    sizeLabel: '5GB',   price: 1450, validityDays: 30,  category: 'SME',       providerCode: 'mtn-10mb-114' },
-  { network: 'MTN', name: 'MTN 10GB',  sizeGb: 10,   sizeLabel: '10GB',  price: 2800, validityDays: 30,  category: 'SME',       providerCode: 'mtn-10mb-115' },
-  { network: 'MTN', name: 'MTN 50MB',  sizeGb: 0.05, sizeLabel: '50MB',  price: 50,   validityDays: 1,   category: 'DAILY',     providerCode: 'mtn-10mb-116' },
-  { network: 'MTN', name: 'MTN 200MB', sizeGb: 0.2,  sizeLabel: '200MB', price: 100,  validityDays: 3,   category: 'DAILY',     providerCode: 'mtn-10mb-117' },
-  { network: 'MTN', name: 'MTN 1GB 7-Day', sizeGb: 1, sizeLabel: '1GB', price: 350, validityDays: 7,   category: 'WEEKLY',    providerCode: 'mtn-10mb-118' },
-  { network: 'MTN', name: 'MTN 20GB',  sizeGb: 20,   sizeLabel: '20GB',  price: 5500, validityDays: 30,  category: 'CORPORATE', providerCode: 'mtn-10mb-119' },
+try {
+  const genPath = path.join(__dirname, 'plans-seed.generated.js')
+  if (fs.existsSync(genPath)) {
+    const mod = require(genPath)
+    dataPlans = mod.GENERATED_DATA_PLANS
+    logger.info(`Using ${dataPlans.length} real VTPass plans from generated file`)
+  } else {
+    throw new Error('no generated file')
+  }
+} catch {
+  logger.warn('⚠️  Using placeholder codes — run node fetch-vtpass-plans.js to get real codes')
+  dataPlans = [
+    // MTN
+    { network:'MTN',      name:'MTN 100MB',       sizeGb:0.1,  sizeLabel:'100MB', price:100,  validityDays:1,  category:'DAILY',   providerCode:'mtn-10mb'        },
+    { network:'MTN',      name:'MTN 1GB',          sizeGb:1,    sizeLabel:'1GB',   price:305,  validityDays:30, category:'SME',     providerCode:'mtn-1gb'         },
+    { network:'MTN',      name:'MTN 2GB',          sizeGb:2,    sizeLabel:'2GB',   price:610,  validityDays:30, category:'SME',     providerCode:'mtn-2gb'         },
+    { network:'MTN',      name:'MTN 3GB',          sizeGb:3,    sizeLabel:'3GB',   price:900,  validityDays:30, category:'SME',     providerCode:'mtn-3gb'         },
+    { network:'MTN',      name:'MTN 5GB',          sizeGb:5,    sizeLabel:'5GB',   price:1520, validityDays:30, category:'SME',     providerCode:'mtn-5gb'         },
+    { network:'MTN',      name:'MTN 10GB',         sizeGb:10,   sizeLabel:'10GB',  price:2990, validityDays:30, category:'SME',     providerCode:'mtn-10gb'        },
+    // AIRTEL
+    { network:'AIRTEL',   name:'Airtel 500MB',     sizeGb:0.5,  sizeLabel:'500MB', price:160,  validityDays:30, category:'SME',     providerCode:'airtel-500mb'    },
+    { network:'AIRTEL',   name:'Airtel 1GB',       sizeGb:1,    sizeLabel:'1GB',   price:305,  validityDays:30, category:'SME',     providerCode:'airtel-1gb'      },
+    { network:'AIRTEL',   name:'Airtel 2GB',       sizeGb:2,    sizeLabel:'2GB',   price:580,  validityDays:30, category:'SME',     providerCode:'airtel-2gb'      },
+    { network:'AIRTEL',   name:'Airtel 6GB',       sizeGb:6,    sizeLabel:'6GB',   price:1700, validityDays:7,  category:'WEEKLY',  providerCode:'airtel-6gb'      },
+    { network:'AIRTEL',   name:'Airtel 10GB',      sizeGb:10,   sizeLabel:'10GB',  price:2875, validityDays:30, category:'SME',     providerCode:'airtel-10gb'     },
+    // GLO
+    { network:'GLO',      name:'Glo 1GB',          sizeGb:1,    sizeLabel:'1GB',   price:290,  validityDays:30, category:'SME',     providerCode:'glo-1gb'         },
+    { network:'GLO',      name:'Glo 2GB',          sizeGb:2,    sizeLabel:'2GB',   price:530,  validityDays:30, category:'SME',     providerCode:'glo-2gb'         },
+    { network:'GLO',      name:'Glo 5GB',          sizeGb:5,    sizeLabel:'5GB',   price:1440, validityDays:30, category:'SME',     providerCode:'glo-5gb'         },
+    { network:'GLO',      name:'Glo 5GB 14-Day',   sizeGb:5,    sizeLabel:'5GB',   price:1610, validityDays:14, category:'WEEKLY',  providerCode:'glo-5gb-2weeks'  },
+    { network:'GLO',      name:'Glo 10GB',         sizeGb:10,   sizeLabel:'10GB',  price:2760, validityDays:30, category:'SME',     providerCode:'glo-10gb'        },
+    // ETISALAT (9mobile)
+    { network:'ETISALAT', name:'9mobile 1GB',      sizeGb:1,    sizeLabel:'1GB',   price:345,  validityDays:30, category:'SME',     providerCode:'etisalat-1gb'    },
+    { network:'ETISALAT', name:'9mobile 2.5GB',    sizeGb:2.5,  sizeLabel:'2.5GB', price:800,  validityDays:30, category:'SME',     providerCode:'etisalat-2-5gb'  },
+    { network:'ETISALAT', name:'9mobile 5GB',      sizeGb:5,    sizeLabel:'5GB',   price:1610, validityDays:30, category:'SME',     providerCode:'etisalat-5gb'    },
+  ]
+}
 
-  // ── AIRTEL ──────────────────────────────────────────────
-  { network: 'AIRTEL', name: 'Airtel 500MB', sizeGb: 0.5, sizeLabel: '500MB', price: 150,  validityDays: 30, category: 'SME',     providerCode: 'airtel-500mb' },
-  { network: 'AIRTEL', name: 'Airtel 1GB',   sizeGb: 1,   sizeLabel: '1GB',   price: 280,  validityDays: 30, category: 'SME',     providerCode: 'airtel-1gb' },
-  { network: 'AIRTEL', name: 'Airtel 2GB',   sizeGb: 2,   sizeLabel: '2GB',   price: 550,  validityDays: 30, category: 'SME',     providerCode: 'airtel-2gb' },
-  { network: 'AIRTEL', name: 'Airtel 3GB',   sizeGb: 3,   sizeLabel: '3GB',   price: 820,  validityDays: 30, category: 'SME',     providerCode: 'airtel-3gb' },
-  { network: 'AIRTEL', name: 'Airtel 5GB',   sizeGb: 5,   sizeLabel: '5GB',   price: 1400, validityDays: 30, category: 'SME',     providerCode: 'airtel-5gb' },
-  { network: 'AIRTEL', name: 'Airtel 6GB',   sizeGb: 6,   sizeLabel: '6GB',   price: 1650, validityDays: 7,  category: 'WEEKLY',  providerCode: 'airtel-6gb-7' },
-  { network: 'AIRTEL', name: 'Airtel 10GB',  sizeGb: 10,  sizeLabel: '10GB',  price: 2700, validityDays: 30, category: 'SME',     providerCode: 'airtel-10gb' },
-  { network: 'AIRTEL', name: 'Airtel 100MB', sizeGb: 0.1, sizeLabel: '100MB', price: 75,   validityDays: 1,  category: 'DAILY',   providerCode: 'airtel-100mb' },
-  { network: 'AIRTEL', name: 'Airtel 20GB',  sizeGb: 20,  sizeLabel: '20GB',  price: 5200, validityDays: 30, category: 'CORPORATE', providerCode: 'airtel-20gb' },
-
-  // ── GLO ─────────────────────────────────────────────────
-  { network: 'GLO', name: 'Glo 500MB', sizeGb: 0.5, sizeLabel: '500MB', price: 140,  validityDays: 30, category: 'SME',    providerCode: 'glo-500mb' },
-  { network: 'GLO', name: 'Glo 1GB',   sizeGb: 1,   sizeLabel: '1GB',   price: 270,  validityDays: 30, category: 'SME',    providerCode: 'glo-1gb' },
-  { network: 'GLO', name: 'Glo 2GB',   sizeGb: 2,   sizeLabel: '2GB',   price: 500,  validityDays: 30, category: 'SME',    providerCode: 'glo-2gb' },
-  { network: 'GLO', name: 'Glo 5GB',   sizeGb: 5,   sizeLabel: '5GB',   price: 1350, validityDays: 30, category: 'SME',    providerCode: 'glo-5gb' },
-  { network: 'GLO', name: 'Glo 5GB 14-Day', sizeGb: 5, sizeLabel: '5GB', price: 1500, validityDays: 14, category: 'WEEKLY', providerCode: 'glo-5gb-14' },
-  { network: 'GLO', name: 'Glo 10GB',  sizeGb: 10,  sizeLabel: '10GB',  price: 2600, validityDays: 30, category: 'SME',    providerCode: 'glo-10gb' },
-  { network: 'GLO', name: 'Glo 15GB',  sizeGb: 15,  sizeLabel: '15GB',  price: 3900, validityDays: 30, category: 'CORPORATE', providerCode: 'glo-15gb' },
-
-  // ── 9MOBILE (ETISALAT) ──────────────────────────────────
-  { network: 'ETISALAT', name: '9mobile 1GB',  sizeGb: 1,  sizeLabel: '1GB',  price: 350,  validityDays: 30, category: 'SME',     providerCode: 'etisalat-1gb' },
-  { network: 'ETISALAT', name: '9mobile 2.5GB',sizeGb: 2.5,sizeLabel: '2.5GB',price: 750,  validityDays: 30, category: 'SME',     providerCode: 'etisalat-2-5gb' },
-  { network: 'ETISALAT', name: '9mobile 5GB',  sizeGb: 5,  sizeLabel: '5GB',  price: 1500, validityDays: 30, category: 'SME',     providerCode: 'etisalat-5gb' },
-  { network: 'ETISALAT', name: '9mobile 11.5GB',sizeGb:11.5,sizeLabel:'11.5GB',price:3000, validityDays: 30, category: 'CORPORATE',providerCode:'etisalat-11-5gb' },
-]
-
+// ─── System config ────────────────────────────────────────────
 const systemConfigs = [
-  { key: 'maintenance_mode',        value: 'false',  description: 'Set to true to show maintenance page', isPublic: true },
-  { key: 'data_purchase_enabled',   value: 'true',   description: 'Enable/disable data purchases',         isPublic: true },
-  { key: 'airtime_purchase_enabled',value: 'true',   description: 'Enable/disable airtime purchases',      isPublic: true },
-  { key: 'electricity_enabled',     value: 'true',   description: 'Enable/disable electricity bills',      isPublic: true },
-  { key: 'cable_tv_enabled',        value: 'true',   description: 'Enable/disable cable TV',               isPublic: true },
-  { key: 'min_wallet_funding',      value: '100',    description: 'Minimum wallet funding amount (₦)',     isPublic: true },
-  { key: 'max_wallet_balance',      value: '500000', description: 'Maximum wallet balance (₦)',            isPublic: true },
-  { key: 'sms_per_unit_cost',       value: '2.8',    description: 'Cost per SMS unit from Termii (₦)',    isPublic: false },
-  { key: 'sms_selling_price',       value: '4.0',    description: 'Price charged per SMS to user (₦)',    isPublic: false },
-  { key: 'vtpass_wallet_alert_threshold', value: '5000', description: 'Alert when VTPass balance drops below this (₦)', isPublic: false },
-  { key: 'referral_signup_bonus',   value: '100',    description: 'Bonus for new referees (₦)',           isPublic: true },
-  { key: 'referral_referrer_bonus', value: '150',    description: 'Bonus for referrers (₦)',             isPublic: true },
+  { key: 'maintenance_mode',         value: 'false',  description: 'Set true to show maintenance page',              isPublic: true  },
+  { key: 'data_purchase_enabled',    value: 'true',   description: 'Toggle data purchases on/off',                   isPublic: true  },
+  { key: 'airtime_purchase_enabled', value: 'true',   description: 'Toggle airtime purchases on/off',                isPublic: true  },
+  { key: 'electricity_enabled',      value: 'true',   description: 'Toggle electricity payments on/off',             isPublic: true  },
+  { key: 'cable_tv_enabled',         value: 'true',   description: 'Toggle cable TV on/off',                         isPublic: true  },
+  { key: 'education_enabled',        value: 'true',   description: 'Toggle WAEC/NECO/JAMB on/off',                   isPublic: true  },
+  { key: 'betting_enabled',          value: 'true',   description: 'Toggle betting wallet funding on/off',           isPublic: true  },
+  { key: 'bulk_sms_enabled',         value: 'true',   description: 'Toggle bulk SMS on/off',                         isPublic: true  },
+  { key: 'min_wallet_funding',       value: '100',    description: 'Minimum wallet funding amount (₦)',              isPublic: true  },
+  { key: 'max_wallet_balance',       value: '500000', description: 'Maximum wallet balance per user (₦)',            isPublic: true  },
+  { key: 'sms_unit_cost',            value: '2.8',    description: 'Cost per SMS from Termii (₦)',                   isPublic: false },
+  { key: 'sms_selling_price',        value: '4.0',    description: 'Price charged per SMS to user (₦)',              isPublic: false },
+  { key: 'vtpass_alert_threshold',   value: '5000',   description: 'Alert when VTPass balance drops below (₦)',      isPublic: false },
+  { key: 'referral_signup_bonus',    value: '100',    description: 'Bonus for new referee on first funding (₦)',     isPublic: true  },
+  { key: 'referral_referrer_bonus',  value: '150',    description: 'Bonus for referrer (₦)',                        isPublic: true  },
+  { key: 'data_plan_margin_percent', value: '15',     description: 'Default markup % over VTPass cost',             isPublic: false },
+  { key: 'app_version',              value: '1.0.0',  description: 'Current app version',                           isPublic: true  },
 ]
 
+// ─── Main ─────────────────────────────────────────────────────
 async function seed() {
-  logger.info('🌱 Starting database seed...')
+  logger.info('🌱 Starting database seed...\n')
 
-  // ── Data Plans ─────────────────────────────────────────────
+  // 1. Data plans
   logger.info(`Seeding ${dataPlans.length} data plans...`)
   let planCount = 0
   for (const plan of dataPlans) {
     await prisma.dataPlan.upsert({
-      where: {
-        network_providerCode: {
-          network:      plan.network as 'MTN',
-          providerCode: plan.providerCode,
-        },
-      },
-      update: {
-        name:         plan.name,
-        sizeGb:       plan.sizeGb,
-        sizeLabel:    plan.sizeLabel,
-        price:        plan.price,
-        validityDays: plan.validityDays,
-        category:     plan.category,
-        isActive:     true,
-      },
-      create: plan as any,
+      where:  { network_providerCode: { network: plan.network as 'MTN', providerCode: plan.providerCode } },
+      update: { name: plan.name, sizeGb: plan.sizeGb, sizeLabel: plan.sizeLabel, price: plan.price, validityDays: plan.validityDays, category: plan.category, isActive: true },
+      create: { network: plan.network as 'MTN', name: plan.name, sizeGb: plan.sizeGb, sizeLabel: plan.sizeLabel, price: plan.price, validityDays: plan.validityDays, category: plan.category, providerCode: plan.providerCode, isActive: true },
     })
     planCount++
   }
   logger.info(`✓ ${planCount} data plans seeded`)
 
-  // ── System Config ──────────────────────────────────────────
+  // 2. System config
   logger.info(`Seeding ${systemConfigs.length} system configs...`)
   for (const config of systemConfigs) {
     await prisma.systemConfig.upsert({
@@ -109,12 +101,38 @@ async function seed() {
   }
   logger.info(`✓ ${systemConfigs.length} system configs seeded`)
 
-  logger.info('\n✅ Database seeded successfully!')
+  // 3. Default admin (only if none exists)
+  const adminExists = await prisma.user.findFirst({
+    where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] } },
+    select: { id: true },
+  })
+
+  if (!adminExists) {
+    const DEFAULT_PASSWORD = 'ChangeMe@123!'
+    const hash = await bcrypt.hash(DEFAULT_PASSWORD, 12)
+    const admin = await prisma.user.create({
+      data: {
+        fullName: 'Super Admin', email: 'admin@salnaj.ng',
+        phone: '08000000000', passwordHash: hash,
+        referralCode: 'SNJ-ADMIN', role: 'SUPER_ADMIN',
+        kycStatus: 'FULL_KYC', isEmailVerified: true, isPhoneVerified: true,
+      },
+    })
+    await prisma.wallet.create({ data: { userId: admin.id } })
+
+    logger.warn('\n────────────────────────────────────────────────')
+    logger.warn('⚠️  DEFAULT ADMIN CREATED — CHANGE PASSWORD NOW!')
+    logger.warn('    Email:    admin@salnaj.ng')
+    logger.warn(`    Password: ${DEFAULT_PASSWORD}`)
+    logger.warn('    Login at: /admin')
+    logger.warn('────────────────────────────────────────────────\n')
+  } else {
+    logger.info('✓ Admin user already exists — skipped')
+  }
+
+  logger.info(`\n✅ Seed complete — ${planCount} plans | ${systemConfigs.length} configs`)
 }
 
 seed()
-  .catch(err => {
-    logger.error('Seed failed', { err })
-    process.exit(1)
-  })
+  .catch(err => { logger.error('Seed failed', { err }); process.exit(1) })
   .finally(() => prisma.$disconnect())

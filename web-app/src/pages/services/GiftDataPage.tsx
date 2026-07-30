@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Gift, Copy, CheckCheck, Share2, QrCode, ArrowRight, Ticket } from 'lucide-react'
 import { DashLayout }   from '@/components/layout/DashLayout'
 import { PinModal }     from '@/components/ui/PinModal'
-import { useAuthStore } from '@/store/auth.store'
+import { useAuth } from '@/context/AuthContext'
 import { formatNaira }  from '@/utils'
 
 // Mock gift codes history
@@ -32,7 +32,7 @@ const NET_COLORS: Record<string, string> = {
 const TABS = ['Send Gift', 'Sent', 'Received']
 
 export default function GiftDataPage() {
-  const { balance, fetchBalance } = useAuthStore()
+  const { balance, refreshBalance } = useAuth()
   const [tab,        setTab]        = useState(0)
   const [selectedPlan, setSelected] = useState<typeof PLANS[0] | null>(null)
   const [giftMessage,  setMessage]  = useState('')
@@ -72,7 +72,7 @@ export default function GiftDataPage() {
     const code = `GIFT-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${selectedPlan!.network.slice(0, 3)}${selectedPlan!.sizeLabel.replace(/[^0-9A-Z]/gi, '').toUpperCase()}`
     setPinOpen(false)
     setNewGiftCode(code)
-    fetchBalance()
+    refreshBalance()
   }
 
   const handleRedeem = () => {

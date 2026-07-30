@@ -4,8 +4,9 @@ import { GraduationCap, Loader2, Minus, Plus } from 'lucide-react'
 import { DashLayout }   from '@/components/layout/DashLayout'
 import { PinModal }     from '@/components/ui/PinModal'
 import { ReceiptModal } from '@/components/ui/ReceiptModal'
+import { useToast }     from '@/components/ui/Toast'
 import { educationApi } from '@/services/endpoints'
-import { useAuthStore } from '@/store/auth.store'
+import { useAuth } from '@/context/AuthContext'
 import { formatNaira }  from '@/utils'
 
 const SERVICES = [
@@ -42,7 +43,8 @@ const SERVICES = [
 ]
 
 export default function EducationPage() {
-  const { balance, fetchBalance } = useAuthStore()
+  const { balance, refreshBalance } = useAuth()
+  const toast = useToast()
   const [service,  setService]   = useState('waec')
   const [planCode, setPlanCode]  = useState('')
   const [phone,    setPhone]     = useState('')
@@ -74,7 +76,7 @@ export default function EducationPage() {
     const ok   = res.data.data?.status === 'SUCCESS'
     const pins = res.data.data?.pins || []
     setReceipt({ open: true, status: ok ? 'success' : 'failed', ref: res.data.data?.reference || '', pins })
-    if (ok) { fetchBalance() }
+    if (ok) { refreshBalance() }
   }
 
   return (

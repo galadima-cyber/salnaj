@@ -5,8 +5,9 @@ import { DashLayout }    from '@/components/layout/DashLayout'
 import { PinModal }      from '@/components/ui/PinModal'
 import { ReceiptModal }  from '@/components/ui/ReceiptModal'
 import { electricityApi, MeterInfo } from '@/services/endpoints'
-import { useAuthStore }  from '@/store/auth.store'
+import { useAuth } from '@/context/AuthContext'
 import { getErrorMessage } from '@/services/api'
+import { useToast } from '@/components/ui/Toast'
 import { formatNaira }   from '@/utils'
 
 const DISCOS = [
@@ -24,7 +25,8 @@ const DISCOS = [
 const PRESETS = [1000, 2000, 5000, 10000, 20000]
 
 export default function ElectricityPage() {
-  const { balance, fetchBalance } = useAuthStore()
+  const { balance, refreshBalance } = useAuth()
+  const toast = useToast()
 
   const [disco,      setDisco]      = useState('')
   const [meterType,  setMeterType]  = useState<'prepaid'|'postpaid'>('prepaid')
@@ -68,7 +70,8 @@ export default function ElectricityPage() {
     const ok    = res.data.data?.status === 'SUCCESS'
     const token = res.data.data?.token
     setReceipt({ open: true, status: ok ? 'success' : 'failed', ref: res.data.data?.reference || '', token })
-    if (ok) fetchBalance()
+    if (ok) { refreshBalance(); toast.success('Token Generated!', token ? `Token: ${token}` : 'Electricity purchased') }
+    else    { toast.error('Transaction Failed', 'Your wallet has been refunded') }
   }
 
   return (
