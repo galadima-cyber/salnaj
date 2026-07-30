@@ -16,7 +16,7 @@ import { formatNaira } from '@/utils'
 // ─── Animation Variants ───────────────────────────────────────
 const fadeUp = {
   hidden: { opacity: 0, y: 32 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: "easeOut" as const } },
 }
 const stagger = {
   visible: { transition: { staggerChildren: 0.1 } },
@@ -205,9 +205,9 @@ const faqs = [
 
 // ─── Sub-components ───────────────────────────────────────────
 
-function Section({ children, id, className = '' }: { children: React.ReactNode; id?: string; className?: string }) {
+function Section({ children, id, className = '', style }: { children: React.ReactNode; id?: string; className?: string; style?: React.CSSProperties }) {
   return (
-    <section id={id} className={`py-20 md:py-28 ${className}`}>
+    <section id={id} className={`py-20 md:py-28 ${className}`} style={style}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {children}
       </div>
@@ -279,7 +279,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
           >
             <div className="px-5 md:px-6 pb-5 md:pb-6">
               <p className="text-base leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>{a}</p>
@@ -407,7 +407,7 @@ export default function LandingPage() {
             <motion.div
               initial={{ opacity: 0, x: 40, scale: 0.95 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
-              transition={{ duration: 0.7, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.7, delay: 0.3, ease: "easeOut" }}
               className="relative hidden lg:block"
             >
               {/* Mock phone/card UI */}
@@ -548,7 +548,7 @@ export default function LandingPage() {
             animate={statsInView ? 'visible' : 'hidden'}
             variants={stagger}
             className="grid grid-cols-2 md:grid-cols-4 divide-x py-8"
-            style={{ divideColor: 'var(--color-border)' }}
+            style={{ borderColor: 'var(--color-border)' }}
           >
             {stats.map((s) => (
               <motion.div key={s.label} variants={fadeUp} className="flex flex-col items-center py-2 px-6">
