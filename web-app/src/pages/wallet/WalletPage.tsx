@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Wallet, Plus, Eye, EyeOff, ArrowUpRight,
-  ArrowDownLeft, Loader2, AlertCircle, ExternalLink,
+  ArrowDownLeft, Loader2, AlertCircle, ExternalLink, Users,
 } from 'lucide-react'
 import { DashLayout }   from '@/components/layout/DashLayout'
 import { walletApi, Transaction } from '@/services/endpoints'
@@ -15,7 +16,7 @@ const FUND_PRESETS = [500, 1000, 2000, 5000, 10000, 20000]
 
 const TX_TYPE_LABELS: Record<string, string> = {
   DATA: 'Data Purchase', AIRTIME: 'Airtime', ELECTRICITY: 'Electricity',
-  CABLE_TV: 'Cable TV', EDUCATION: 'Education', BETTING: 'Betting Wallet',
+  CABLE_TV: 'Cable TV', EDUCATION: 'Education',
   WALLET_FUND: 'Wallet Funded', REFERRAL_BONUS: 'Referral Bonus',
   BULK_SMS: 'Bulk SMS', RECHARGE_CARD: 'Recharge Cards',
 }
@@ -111,11 +112,21 @@ export default function WalletPage() {
               <p className="font-heading text-4xl text-white mb-1" style={{ fontWeight: 800 }}>
                 {balanceVisible ? (balance ? formatNaira(balance.main) : '---') : '₦ ••••••'}
               </p>
-              {balance && balance.bonus > 0 && (
-                <span className="badge text-xs" style={{ background: 'rgba(255,255,255,0.15)', color: 'white' }}>
-                  🎁 Bonus: {balanceVisible ? formatNaira(balance.bonus) : '₦ ••••'}
-                </span>
-              )}
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                {balance && balance.bonus > 0 && (
+                  <span className="badge text-xs" style={{ background: 'rgba(255,255,255,0.15)', color: 'white' }}>
+                    🎁 Bonus: {balanceVisible ? formatNaira(balance.bonus) : '₦ ••••'}
+                  </span>
+                )}
+                {balance && balance.referral > 0 && (
+                  <Link to="/referrals" className="badge text-xs flex items-center gap-1.5 transition-all hover:bg-white/30"
+                        style={{ background: 'rgba(255,255,255,0.22)', color: 'white', textDecoration: 'none' }}>
+                    <Users size={12} />
+                    <span>Referral Earnings: {balanceVisible ? formatNaira(balance.referral) : '₦ ••••'}</span>
+                    <span className="underline opacity-90">Withdraw</span>
+                  </Link>
+                )}
+              </div>
             </div>
 
             {/* Quick fund form */}

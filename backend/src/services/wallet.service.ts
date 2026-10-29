@@ -12,7 +12,7 @@ export const walletService = {
    */
   async getBalance(userId: string) {
     const cached = await redisClient.getJSON<{
-      main: number; bonus: number; cashback: number
+      main: number; bonus: number; referral: number; cashback: number
     }>(CacheKeys.walletBalance(userId))
 
     if (cached) return cached
@@ -23,6 +23,7 @@ export const walletService = {
     const balances = {
       main:     Number(wallet.mainBalance),
       bonus:    Number(wallet.bonusBalance),
+      referral: Number(wallet.referralBalance),
       cashback: Number(wallet.cashbackBalance),
       total:    Number(wallet.mainBalance) + Number(wallet.bonusBalance),
     }
@@ -37,7 +38,7 @@ export const walletService = {
   async credit(params: {
     userId:    string
     amount:    number
-    type?:     'main' | 'bonus' | 'cashback'
+    type?:     'main' | 'bonus' | 'cashback' | 'referral'
     prismaCtx?: typeof prisma  // pass transaction context if within a larger tx
   }) {
     const { userId, amount, type = 'main', prismaCtx = prisma } = params
@@ -47,6 +48,7 @@ export const walletService = {
     const updateField =
       type === 'bonus'    ? { bonusBalance:    { increment: amount } } :
       type === 'cashback' ? { cashbackBalance: { increment: amount } } :
+      type === 'referral' ? { referralBalance: { increment: amount } } :
                             { mainBalance:     { increment: amount },
                               totalFunded:     { increment: amount } }
 

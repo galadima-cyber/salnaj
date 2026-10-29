@@ -100,7 +100,7 @@ export const brandConfig = {
 
     // Extended (Option 2)
     airtimeToCash: true,
-    bettingWallet: true,
+    bettingWallet: false,
     bulkSms: true,
     rechargeCardPrinting: true,
     referralSystem: true,

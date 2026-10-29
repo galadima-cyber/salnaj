@@ -17,7 +17,7 @@ const BuyAirtimePage   = lazy(() => import('@/pages/services/BuyAirtimePage'))
 const ElectricityPage  = lazy(() => import('@/pages/services/ElectricityPage'))
 const CableTvPage      = lazy(() => import('@/pages/services/CableTvPage'))
 const EducationPage    = lazy(() => import('@/pages/services/EducationPage'))
-const BettingPage      = lazy(() => import('@/pages/services/BettingPage'))
+const AirtimeToCashPage = lazy(() => import('@/pages/services/AirtimeToCashPage'))
 const BulkSmsPage      = lazy(() => import('@/pages/services/BulkSmsPage'))
 const GiftDataPage     = lazy(() => import('@/pages/services/GiftDataPage'))
 const WalletPage       = lazy(() => import('@/pages/wallet/WalletPage'))
@@ -126,13 +126,12 @@ function AppRouter() {
         <Route path="/electricity"    element={<RequireAuth><ElectricityPage /></RequireAuth>} />
         <Route path="/cable-tv"       element={<RequireAuth><CableTvPage /></RequireAuth>} />
         <Route path="/education"      element={<RequireAuth><EducationPage /></RequireAuth>} />
-        <Route path="/betting"        element={<RequireAuth><BettingPage /></RequireAuth>} />
+        <Route path="/airtime-cash"   element={<RequireAuth><AirtimeToCashPage /></RequireAuth>} />
         <Route path="/bulk-sms"       element={<RequireAuth><BulkSmsPage /></RequireAuth>} />
         <Route path="/gift-data"      element={<RequireAuth><GiftDataPage /></RequireAuth>} />
         <Route path="/recharge-cards" element={<RequireAuth><BuyDataPage /></RequireAuth>} />
-        <Route path="/airtime-cash"   element={<RequireAuth><BuyAirtimePage /></RequireAuth>} />
         <Route path="/smart-buy"      element={<RequireAuth><BuyDataPage /></RequireAuth>} />
-        <Route path="/api-access"     element={<RequireAuth><ProfilePage /></RequireAuth>} />
+        <Route path="/api-access"     element={<Navigate to="/settings?tab=api" replace />} />
 
         {/* Wallet & account */}
         <Route path="/wallet" element={<RequireAuth><WalletPage /></RequireAuth>} />

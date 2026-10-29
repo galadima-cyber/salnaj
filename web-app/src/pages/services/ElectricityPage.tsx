@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext'
 import { getErrorMessage } from '@/services/api'
 import { useToast } from '@/components/ui/Toast'
 import { formatNaira }   from '@/utils'
+import { DiscoLogo } from '@/components/ui/ProviderIcons'
 
 const DISCOS = [
   { id: 'ikeja-electric',    label: 'Ikeja Electric',     region: 'Lagos (Mainland)' },
@@ -91,17 +92,20 @@ export default function ElectricityPage() {
         {/* DISCO selector */}
         <div className="card p-5" style={{ borderRadius: 'var(--radius-xl)' }}>
           <p className="font-heading text-sm font-700 mb-3" style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Select Electricity Provider (DISCO)</p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {DISCOS.map(d => (
               <button key={d.id} onClick={() => { setDisco(d.id); setMeterInfo(null) }}
-                className="text-left p-3 rounded-xl border-2 transition-all"
+                className="flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left"
                 style={{
                   background:  disco === d.id ? 'rgba(124,58,237,0.08)' : 'var(--color-surface-elevated)',
                   borderColor: disco === d.id ? '#7C3AED' : 'var(--color-border)',
                   cursor: 'pointer',
                 }}>
-                <p className="font-heading text-xs font-700 truncate" style={{ fontWeight: 700, color: disco === d.id ? '#7C3AED' : 'var(--color-text-primary)' }}>{d.label}</p>
-                <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>{d.region}</p>
+                <DiscoLogo disco={d.id} size={36} className="shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-heading text-xs font-700 truncate" style={{ fontWeight: 700, color: disco === d.id ? '#7C3AED' : 'var(--color-text-primary)' }}>{d.label}</p>
+                  <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>{d.region}</p>
+                </div>
               </button>
             ))}
           </div>

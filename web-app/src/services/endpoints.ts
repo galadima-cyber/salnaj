@@ -12,13 +12,20 @@ export interface User {
   referralCode:    string
   isEmailVerified: boolean
   isPhoneVerified: boolean
+  hasPin?:         boolean
   profilePhoto?:   string
-  wallet?: { mainBalance: number; bonusBalance: number }
+  wallet?: {
+    mainBalance: number
+    bonusBalance: number
+    referralBalance: number
+    cashbackBalance: number
+  }
 }
 
 export interface WalletBalance {
   main:     number
   bonus:    number
+  referral: number
   cashback: number
   total:    number
 }
@@ -59,6 +66,7 @@ export interface Transaction {
   reference:     string
   providerToken?: string
   failureReason?: string
+  metadata?:     any
   createdAt:     string
   completedAt?:  string
 }
@@ -76,15 +84,92 @@ export interface DecoderInfo {
   dueDate?:       string
 }
 
-export interface PaginatedResponse<T> {
-  items:      T[]
-  page:       number
-  limit:      number
-  total:      number
-  totalPages: number
+export interface NotificationItem {
+  id:        string
+  userId:    string
+  title:     string
+  message:   string
+  type:      'TRANSACTION' | 'PROMO' | 'SECURITY' | 'SYSTEM'
+  isRead:    boolean
+  actionUrl?: string
+  metadata?: any
+  createdAt: string
 }
 
-// ─── Auth ─────────────────────────────────────────────────────
+export interface BulkSmsJob {
+  id:          string
+  senderId:    string
+  message:     string
+  totalCount:  number
+  sentCount:   number
+  failedCount: number
+  totalCost:   number
+  status:      string
+  createdAt:   string
+  completedAt?: string
+}
+
+export interface AirtimeCashRate {
+  rate:          number
+  merchantPhone: string
+  ussdPattern:   string
+}
+
+export interface AirtimeCashItem {
+  id:            string
+  network:       string
+  phoneNumber:   string
+  airtimeAmount: number
+  cashAmount:    number
+  ratePercent:   number
+  merchantPhone: string
+  reference:     string
+  status:        string
+  adminNote?:    string
+  createdAt:     string
+}
+
+export interface ReferralStats {
+  referralCode:    string
+  referralLink:    string
+  referralBalance: number
+  mainBalance:     number
+  totalEarned:     number
+  totalReferred:   number
+  minWithdrawal:   number
+  referredUsers:   Array<{
+    id:        string
+    name:      string
+    phone:     string
+    joinedAt:  string
+    hasFunded: boolean
+  }>
+  earningsHistory: Array<{
+    id:        string
+    amount:    number
+    type:      string
+    isPaid:    boolean
+    createdAt: string
+  }>
+}
+
+export interface ApiKeyDetails {
+  id:           string
+  key:          string
+  label:        string
+  status:       string
+  webhookUrl:   string
+  requestCount: number
+  monthlyLimit: number
+  createdAt:    string
+  lastUsedAt?:  string
+  endpoints: {
+    baseUrl:          string
+    documentationUrl: string
+  }
+}
+
+// ─── Auth API ─────────────────────────────────────────────────
 
 export const authApi = {
   register: (data: {
@@ -112,10 +197,16 @@ export const authApi = {
 
   setPin: (pin: string) => api.post('/auth/set-pin', { pin }),
 
+  changePin: (data: { currentPin: string; newPin: string }) =>
+    api.post('/auth/change-pin', data),
+
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    api.post('/auth/change-password', data),
+
   sendOtp: (purpose: string) => api.post('/auth/send-otp', { purpose }),
 }
 
-// ─── Wallet ───────────────────────────────────────────────────
+// ─── Wallet API ───────────────────────────────────────────────
 
 export const walletApi = {
   getBalance: () =>
@@ -135,7 +226,7 @@ export const walletApi = {
     api.get(`/wallet/history?page=${page}&limit=${limit}`),
 }
 
-// ─── Data ─────────────────────────────────────────────────────
+// ─── Data API ─────────────────────────────────────────────────
 
 export const dataApi = {
   getPlans: (network: string) =>
@@ -154,7 +245,7 @@ export const dataApi = {
     api.post('/data/purchase', data),
 }
 
-// ─── Airtime ──────────────────────────────────────────────────
+// ─── Airtime API ──────────────────────────────────────────────
 
 export const airtimeApi = {
   purchase: (data: {
@@ -162,7 +253,7 @@ export const airtimeApi = {
   }) => api.post('/airtime/purchase', data),
 }
 
-// ─── Electricity ──────────────────────────────────────────────
+// ─── Electricity API ──────────────────────────────────────────
 
 export const electricityApi = {
   verifyMeter: (meterNumber: string, disco: string, meterType: string) =>
@@ -176,7 +267,7 @@ export const electricityApi = {
   }) => api.post('/electricity/purchase', data),
 }
 
-// ─── Cable TV ─────────────────────────────────────────────────
+// ─── Cable TV API ─────────────────────────────────────────────
 
 export const cableApi = {
   verifyDecoder: (decoderNumber: string, provider: string) =>
@@ -190,7 +281,7 @@ export const cableApi = {
   }) => api.post('/cable/purchase', data),
 }
 
-// ─── Education ────────────────────────────────────────────────
+// ─── Education API ────────────────────────────────────────────
 
 export const educationApi = {
   purchase: (data: {
@@ -199,21 +290,119 @@ export const educationApi = {
   }) => api.post('/education/purchase', data),
 }
 
-// ─── Betting ──────────────────────────────────────────────────
+// ─── Bulk SMS API ─────────────────────────────────────────────
 
-export const bettingApi = {
-  verifyUser: (userId: string, serviceId: string) =>
-    api.post<{ success: boolean; data: { name: string } }>(
-      '/betting/verify', { userId, serviceId }
-    ),
+export const bulkSmsApi = {
+  estimate: (message: string, recipients: string[]) =>
+    api.post<{ success: boolean; data: {
+      charCount: number
+      pages: number
+      recipientCount: number
+      costPerPage: number
+      totalUnits: number
+      totalCost: number
+    } }>('/bulk-sms/estimate', { message, recipients }),
 
-  fund: (data: {
-    serviceId: string; bettingId: string
-    amount: number; phone: string; pin: string
-  }) => api.post('/betting/fund', data),
+  send: (data: {
+    senderId: string
+    message: string
+    recipients: string[] | string
+    pin: string
+  }) => api.post<{ success: boolean; message: string; data: {
+    reference: string
+    jobId: string
+    recipientsCount: number
+    pages: number
+    totalCost: number
+  } }>('/bulk-sms/send', data),
+
+  getHistory: (page = 1, limit = 15) =>
+    api.get<{ success: boolean; data: {
+      items: BulkSmsJob[]
+      meta: { page: number; limit: number; total: number; totalPages: number }
+    } }>(`/bulk-sms/history?page=${page}&limit=${limit}`),
 }
 
-// ─── Transactions ─────────────────────────────────────────────
+// ─── Airtime to Cash API ──────────────────────────────────────
+
+export const airtimeCashApi = {
+  getRates: () =>
+    api.get<{ success: boolean; data: {
+      rates: Record<string, AirtimeCashRate>
+      minAmount: number
+      maxAmount: number
+    } }>('/airtime-to-cash/rates'),
+
+  submit: (data: {
+    network: string
+    phoneNumber: string
+    airtimeAmount: number
+    pin: string
+  }) => api.post<{ success: boolean; message: string; data: {
+    reference: string
+    network: string
+    airtimeAmount: number
+    cashPayout: number
+    ratePercent: number
+    merchantPhone: string
+    ussdCode: string
+    instructions: string
+  } }>('/airtime-to-cash/submit', data),
+
+  getHistory: (page = 1, limit = 15) =>
+    api.get<{ success: boolean; data: {
+      items: AirtimeCashItem[]
+      meta: { page: number; limit: number; total: number; totalPages: number }
+    } }>(`/airtime-to-cash/history?page=${page}&limit=${limit}`),
+}
+
+// ─── Referral API ─────────────────────────────────────────────
+
+export const referralApi = {
+  getStats: () =>
+    api.get<{ success: boolean; data: ReferralStats }>('/referrals/stats'),
+
+  withdraw: (data: { amount: number; pin: string }) =>
+    api.post<{ success: boolean; message: string; data: {
+      reference: string
+      referralBalance: number
+      mainBalance: number
+    } }>('/referrals/withdraw', data),
+}
+
+// ─── API Key / Reseller API ───────────────────────────────────
+
+export const apiKeyApi = {
+  get: () =>
+    api.get<{ success: boolean; data: ApiKeyDetails }>('/api-keys'),
+
+  regenerate: () =>
+    api.post<{ success: boolean; message: string; data: ApiKeyDetails }>('/api-keys/regenerate'),
+
+  updateWebhook: (webhookUrl: string) =>
+    api.put<{ success: boolean; message: string; data: { webhookUrl: string } }>(
+      '/api-keys/webhook', { webhookUrl }
+    ),
+}
+
+// ─── Notifications API ────────────────────────────────────────
+
+export const notificationApi = {
+  getAll: (page = 1, limit = 20) =>
+    api.get<{ success: boolean; data: {
+      items: NotificationItem[]
+      unreadCount: number
+      meta: { page: number; limit: number; total: number; totalPages: number }
+    } }>(`/notifications?page=${page}&limit=${limit}`),
+
+  markAsRead: (id: string) =>
+    api.patch(`/notifications/${id}/read`),
+
+  markAllAsRead: () =>
+    api.post('/notifications/mark-all-read'),
+}
+
+// ─── Transactions API ─────────────────────────────────────────
 
 export const txApi = {
   getAll: (params?: { page?: number; limit?: number; type?: string; status?: string }) => {

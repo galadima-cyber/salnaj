@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import { env }    from '../config/env'
+import { env } from '../config/env'
 import { logger } from '../config/logger'
 import { generateRef, sleep } from '../utils'
 import { VTPassResponse, VTPassStatus } from '../types'
@@ -14,13 +14,13 @@ class VTPassService {
     ).toString('base64')
 
     this.client = axios.create({
-      baseURL:  env.VTPASS_BASE_URL,
-      timeout:  30_000,
+      baseURL: env.VTPASS_BASE_URL,
+      timeout: 30_000,
       headers: {
         'Content-Type': 'application/json',
-        'api-key':      env.VTPASS_API_KEY,
-        'public-key':   env.VTPASS_PUBLIC_KEY,
-        'secret-key':   env.VTPASS_SECRET_KEY,
+        'api-key': env.VTPASS_API_KEY,
+        'public-key': env.VTPASS_PUBLIC_KEY,
+        'secret-key': env.VTPASS_SECRET_KEY,
       },
     })
   }
@@ -62,9 +62,9 @@ class VTPassService {
     if (cached) return cached
 
     const networkMap: Record<string, string> = {
-      MTN:      'mtn-data',
-      AIRTEL:   'airtel-data',
-      GLO:      'glo-data',
+      MTN: 'mtn-data',
+      AIRTEL: 'airtel-data',
+      GLO: 'glo-data',
       ETISALAT: 'etisalat-data',
     }
     const serviceId = networkMap[network.toUpperCase()]
@@ -80,9 +80,9 @@ class VTPassService {
 
   async purchaseAirtime(params: {
     requestId: string
-    network:   string
-    phone:     string
-    amount:    number
+    network: string
+    phone: string
+    amount: number
   }): Promise<{ status: VTPassStatus; providerRef?: string; data: VTPassResponse }> {
     const networkMap: Record<string, string> = {
       MTN: 'mtn', AIRTEL: 'airtel', GLO: 'glo', ETISALAT: 'etisalat'
@@ -97,12 +97,12 @@ class VTPassService {
     const data = await this.post<VTPassResponse>('/pay', {
       request_id: params.requestId,
       serviceID,
-      amount:     params.amount,
-      phone:      params.phone,
+      amount: params.amount,
+      phone: params.phone,
     })
 
     return {
-      status:      this.parseStatus(data.code),
+      status: this.parseStatus(data.code),
       providerRef: data.requestId,
       data,
     }
@@ -111,11 +111,11 @@ class VTPassService {
   // ─── Data ────────────────────────────────────────────────────
 
   async purchaseData(params: {
-    requestId:     string
-    network:       string
-    phone:         string
+    requestId: string
+    network: string
+    phone: string
     variationCode: string
-    amount:        number
+    amount: number
   }): Promise<{ status: VTPassStatus; providerRef?: string; data: VTPassResponse }> {
     const networkMap: Record<string, string> = {
       MTN: 'mtn-data', AIRTEL: 'airtel-data', GLO: 'glo-data', ETISALAT: 'etisalat-data'
@@ -128,16 +128,16 @@ class VTPassService {
     })
 
     const data = await this.post<VTPassResponse>('/pay', {
-      request_id:      params.requestId,
+      request_id: params.requestId,
       serviceID,
-      billersCode:     params.phone,
-      variation_code:  params.variationCode,
-      amount:          params.amount,
-      phone:           params.phone,
+      billersCode: params.phone,
+      variation_code: params.variationCode,
+      amount: params.amount,
+      phone: params.phone,
     })
 
     return {
-      status:      this.parseStatus(data.code),
+      status: this.parseStatus(data.code),
       providerRef: data.requestId,
       data,
     }
@@ -146,15 +146,15 @@ class VTPassService {
   // ─── Electricity ─────────────────────────────────────────────
 
   async verifyMeter(meterNumber: string, disco: string, meterType: 'prepaid' | 'postpaid'): Promise<{
-    customerName:    string
+    customerName: string
     customerAddress: string
-    meterNumber:     string
-    minAmount:       number
+    meterNumber: string
+    minAmount: number
   }> {
     const res = await this.client.post('/merchant-verify', {
-      billersCode:     meterNumber,
-      serviceID:       disco,
-      type:            meterType,
+      billersCode: meterNumber,
+      serviceID: disco,
+      type: meterType,
     })
 
     const content = res.data?.content
@@ -163,38 +163,38 @@ class VTPassService {
     }
 
     return {
-      customerName:    content.Customer_Name,
+      customerName: content.Customer_Name,
       customerAddress: content.Address || '',
-      meterNumber:     content.Meter_Number || meterNumber,
-      minAmount:       content.Minimum_Amount || 500,
+      meterNumber: content.Meter_Number || meterNumber,
+      minAmount: content.Minimum_Amount || 500,
     }
   }
 
   async purchaseElectricity(params: {
-    requestId:   string
-    disco:       string
+    requestId: string
+    disco: string
     meterNumber: string
-    meterType:   'prepaid' | 'postpaid'
-    amount:      number
-    phone:       string
+    meterType: 'prepaid' | 'postpaid'
+    amount: number
+    phone: string
   }): Promise<{ status: VTPassStatus; token?: string; providerRef?: string; data: VTPassResponse }> {
     logger.info('VTPass electricity purchase initiated', {
       disco: params.disco, amount: params.amount
     })
 
     const data = await this.post<VTPassResponse>('/pay', {
-      request_id:      params.requestId,
-      serviceID:       params.disco,
-      billersCode:     params.meterNumber,
-      variation_code:  params.meterType,
-      amount:          params.amount,
-      phone:           params.phone,
+      request_id: params.requestId,
+      serviceID: params.disco,
+      billersCode: params.meterNumber,
+      variation_code: params.meterType,
+      amount: params.amount,
+      phone: params.phone,
     })
 
     const token = data.Token || data.token || data.purchased_code
 
     return {
-      status:      this.parseStatus(data.code),
+      status: this.parseStatus(data.code),
       token,
       providerRef: data.requestId,
       data,
@@ -204,13 +204,13 @@ class VTPassService {
   // ─── Cable TV ─────────────────────────────────────────────────
 
   async verifyDecoder(decoderNumber: string, provider: string): Promise<{
-    customerName:   string
+    customerName: string
     currentPackage: string
-    dueDate?:       string
+    dueDate?: string
   }> {
     const res = await this.client.post('/merchant-verify', {
       billersCode: decoderNumber,
-      serviceID:   provider,
+      serviceID: provider,
     })
 
     const content = res.data?.content
@@ -219,38 +219,38 @@ class VTPassService {
     }
 
     return {
-      customerName:   content.Customer_Name,
-      currentPackage: content.Current_Bouquet   || '',
-      dueDate:        content.Due_Date          || '',
+      customerName: content.Customer_Name,
+      currentPackage: content.Current_Bouquet || '',
+      dueDate: content.Due_Date || '',
     }
   }
 
   async purchaseCableTv(params: {
-    requestId:     string
-    provider:      string
+    requestId: string
+    provider: string
     decoderNumber: string
     variationCode: string
-    amount:        number
-    phone:         string
-    quantity?:     number
+    amount: number
+    phone: string
+    quantity?: number
   }): Promise<{ status: VTPassStatus; providerRef?: string; data: VTPassResponse }> {
     logger.info('VTPass cable TV purchase initiated', {
       provider: params.provider, plan: params.variationCode
     })
 
     const data = await this.post<VTPassResponse>('/pay', {
-      request_id:          params.requestId,
-      serviceID:           params.provider,
-      billersCode:         params.decoderNumber,
-      variation_code:      params.variationCode,
-      amount:              params.amount,
-      phone:               params.phone,
-      quantity:            params.quantity || 1,
-      subscription_type:   'change',
+      request_id: params.requestId,
+      serviceID: params.provider,
+      billersCode: params.decoderNumber,
+      variation_code: params.variationCode,
+      amount: params.amount,
+      phone: params.phone,
+      quantity: params.quantity || 1,
+      subscription_type: 'change',
     })
 
     return {
-      status:      this.parseStatus(data.code),
+      status: this.parseStatus(data.code),
       providerRef: data.requestId,
       data,
     }
@@ -259,31 +259,31 @@ class VTPassService {
   // ─── Education (WAEC / NECO / JAMB) ──────────────────────────
 
   async purchaseEducation(params: {
-    requestId:     string
-    serviceId:     string   // 'waec' | 'neco' | 'jamb'
+    requestId: string
+    serviceId: string   // 'waec' | 'neco' | 'jamb'
     variationCode: string
-    amount:        number
-    phone:         string
-    quantity?:     number
+    amount: number
+    phone: string
+    quantity?: number
   }): Promise<{ status: VTPassStatus; pins?: string[]; providerRef?: string; data: VTPassResponse }> {
     logger.info('VTPass education purchase initiated', {
       service: params.serviceId, qty: params.quantity
     })
 
     const data = await this.post<VTPassResponse>('/pay', {
-      request_id:     params.requestId,
-      serviceID:      params.serviceId,
+      request_id: params.requestId,
+      serviceID: params.serviceId,
       variation_code: params.variationCode,
-      amount:         params.amount,
-      phone:          params.phone,
-      quantity:       params.quantity || 1,
+      amount: params.amount,
+      phone: params.phone,
+      quantity: params.quantity || 1,
     })
 
     const rawPins = data.purchased_code || ''
     const pins = rawPins ? rawPins.split(',').map((p: string) => p.trim()) : []
 
     return {
-      status:      this.parseStatus(data.code),
+      status: this.parseStatus(data.code),
       pins,
       providerRef: data.requestId,
       data,
@@ -295,7 +295,7 @@ class VTPassService {
   async verifyBettingUser(userId: string, serviceId: string): Promise<{ name: string }> {
     const res = await this.client.post('/merchant-verify', {
       billersCode: userId,
-      serviceID:   serviceId,
+      serviceID: serviceId,
     })
     const content = res.data?.content
     if (!content?.Customer_Name) throw new Error('Betting user ID not found')
@@ -303,18 +303,18 @@ class VTPassService {
   }
 
   async fundBettingWallet(params: {
-    requestId:  string
-    serviceId:  string
-    bettingId:  string
-    amount:     number
-    phone:      string
+    requestId: string
+    serviceId: string
+    bettingId: string
+    amount: number
+    phone: string
   }): Promise<{ status: VTPassStatus; providerRef?: string; data: VTPassResponse }> {
     const data = await this.post<VTPassResponse>('/pay', {
-      request_id:  params.requestId,
-      serviceID:   params.serviceId,
+      request_id: params.requestId,
+      serviceID: params.serviceId,
       billersCode: params.bettingId,
-      amount:      params.amount,
-      phone:       params.phone,
+      amount: params.amount,
+      phone: params.phone,
     })
     return { status: this.parseStatus(data.code), providerRef: data.requestId, data }
   }

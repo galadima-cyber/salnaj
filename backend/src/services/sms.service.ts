@@ -63,7 +63,11 @@ export const smsService = {
           channel:  'generic',
         })
         sent += chunk.length
-      } catch {
+      } catch (err: any) {
+        logger.error('Bulk SMS batch dispatch error:', {
+          error: err?.response?.data || err?.message,
+          count: chunk.length,
+        })
         failed += chunk.length
       }
     }

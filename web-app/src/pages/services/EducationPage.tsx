@@ -8,6 +8,13 @@ import { useToast }     from '@/components/ui/Toast'
 import { educationApi } from '@/services/endpoints'
 import { useAuth } from '@/context/AuthContext'
 import { formatNaira }  from '@/utils'
+import { WaecLogo, NecoLogo, JambLogo } from '@/components/ui/ProviderIcons'
+
+const EDU_ICONS: Record<string, React.ElementType> = {
+  waec: WaecLogo,
+  neco: NecoLogo,
+  jamb: JambLogo,
+}
 
 const SERVICES = [
   {
@@ -110,10 +117,15 @@ export default function EducationPage() {
                   borderColor: service === s.id ? s.color : 'var(--color-border)',
                   cursor: 'pointer',
                 }}>
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center font-heading font-800 text-sm text-white"
-                     style={{ background: s.color, fontWeight: 800 }}>
-                  {s.label.slice(0, 2)}
-                </div>
+                {(() => {
+                  const IconComp = EDU_ICONS[s.id]
+                  return IconComp ? <IconComp size={40} /> : (
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center font-heading font-800 text-sm text-white"
+                         style={{ background: s.color, fontWeight: 800 }}>
+                      {s.label.slice(0, 2)}
+                    </div>
+                  )
+                })()}
                 <span className="text-xs font-700"
                       style={{ fontWeight: 700, color: service === s.id ? s.color : 'var(--color-text-secondary)' }}>
                   {s.label}

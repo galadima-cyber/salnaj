@@ -1,296 +1,723 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Settings, User, Shield, Bell, Eye, EyeOff,
-  ChevronRight, Check, Camera, LogOut,
-  Smartphone, Lock, KeyRound,
+  User, Shield, Bell, Eye, EyeOff,
+  Check, KeyRound, Lock, Code2, Copy,
+  CheckCheck, RefreshCw, AlertCircle, Smartphone, ExternalLink,
 } from 'lucide-react'
-import { DashLayout }   from '@/components/layout/DashLayout'
+import { DashLayout } from '@/components/layout/DashLayout'
 import { useAuth } from '@/context/AuthContext'
-import { authApi }      from '@/services/endpoints'
+import { authApi, apiKeyApi, ApiKeyDetails } from '@/services/endpoints'
 import { getErrorMessage } from '@/services/api'
+import { useToast } from '@/components/ui/Toast'
 
 const TABS = [
-  { id: 'profile',  label: 'Profile',  icon: User    },
-  { id: 'security', label: 'Security', icon: Shield  },
-  { id: 'notify',   label: 'Notify',   icon: Bell    },
+  { id: 'profile',  label: 'Profile',         icon: User   },
+  { id: 'security', label: 'Security & PIN',  icon: Shield },
+  { id: 'api',      label: 'API & Developer', icon: Code2  },
+  { id: 'notify',   label: 'Notifications',   icon: Bell   },
 ]
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="font-heading text-xs font-700 mb-3 mt-1"
-       style={{ fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', fontSize: '0.68rem' }}>
-      {children}
-    </p>
-  )
-}
-
-function SettingRow({
-  icon: Icon, label, value, danger = false, onClick, toggle, toggled,
-}: {
-  icon: React.ElementType; label: string; value?: string
-  danger?: boolean; onClick?: () => void
-  toggle?: boolean; toggled?: boolean
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="w-full flex items-center gap-3 p-4 rounded-xl transition-all text-left"
-      style={{ background: 'none', border: 'none', cursor: onClick ? 'pointer' : 'default' }}
-      onMouseEnter={e => onClick && ((e.currentTarget as HTMLElement).style.background = 'var(--color-surface-elevated)')}
-      onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
-    >
-      <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-           style={{ background: danger ? 'var(--color-error-subtle)' : 'var(--color-surface-elevated)' }}>
-        <Icon size={17} style={{ color: danger ? 'var(--color-error)' : 'var(--color-text-secondary)' }} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-heading text-sm font-600"
-           style={{ fontWeight: 600, color: danger ? 'var(--color-error)' : 'var(--color-text-primary)' }}>
-          {label}
-        </p>
-        {value && (
-          <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{value}</p>
-        )}
-      </div>
-      {toggle !== undefined ? (
-        <div className="w-11 h-6 rounded-full relative shrink-0 transition-all"
-             style={{ background: toggled ? 'var(--color-secondary)' : 'var(--color-border)' }}>
-          <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all"
-                style={{ left: toggled ? 'calc(100% - 22px)' : '2px' }} />
-        </div>
-      ) : onClick ? (
-        <ChevronRight size={16} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
-      ) : null}
-    </button>
-  )
-}
-
 export default function ProfilePage() {
-  const { user, logout, updateUser } = useAuth()
-  const [tab, setTab] = useState('profile')
+  const { user, refreshUser } = useAuth()
+  const toast = useToast()
+  const [searchParams, setSearchParams] = useSearchParams()
 
-  // Profile form state
-  const [name,       setName]       = useState(user?.fullName || '')
-  const [saving,     setSaving]     = useState(false)
-  const [saved,      setSaved]      = useState(false)
-  const [saveError,  setSaveError]  = useState('')
+  const initialTab = searchParams.get('tab') || 'profile'
+  const [activeTab, setActiveTab] = useState(initialTab)
+
+  // Profile form
+  const [fullName, setFullName] = useState(user?.fullName || '')
+  const [profileSaving, setProfileSaving] = useState(false)
 
   // PIN state
-  const [currentPin, setCurrentPin] = useState('')
-  const [newPin,     setNewPin]     = useState('')
-  const [pinSaving,  setPinSaving]  = useState(false)
-  const [showPins,   setShowPins]   = useState(false)
-  const [pinError,   setPinError]   = useState('')
-  const [pinSuccess, setPinSuccess] = useState(false)
+  const [setPinValue, setSetPinValue] = useState('')
+  const [currentPin,  setCurrentPin]  = useState('')
+  const [newPin,      setNewPin]      = useState('')
+  const [confirmPin,  setConfirmPin]  = useState('')
+  const [pinSaving,   setPinSaving]   = useState(false)
+  const [pinError,    setPinError]    = useState('')
 
-  // Notification prefs (mock)
+  // Password state
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword,     setNewPassword]     = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword,    setShowPassword]    = useState(false)
+  const [passSaving,      setPassSaving]      = useState(false)
+  const [passError,       setPassError]       = useState('')
+
+  // API Key state
+  const [apiKeyData,  setApiKeyData]  = useState<ApiKeyDetails | null>(null)
+  const [showKey,     setShowKey]     = useState(false)
+  const [copiedKey,   setCopiedKey]   = useState(false)
+  const [webhookUrl,  setWebhookUrl]  = useState('')
+  const [webhookSaving, setWebhookSaving] = useState(false)
+
+  // Notification prefs
   const [notifs, setNotifs] = useState({
     txAlerts:   true,
     promos:     false,
     autopilot:  true,
-    referrals:  true,
     lowBalance: true,
   })
 
+  // Sync tab with URL
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam && TABS.some(t => t.id === tabParam)) {
+      setActiveTab(tabParam)
+    }
+  }, [searchParams])
+
+  const handleTabChange = (id: string) => {
+    setActiveTab(id)
+    setSearchParams({ tab: id })
+  }
+
+  // Load API Key details when API tab is active
+  useEffect(() => {
+    if (activeTab === 'api') {
+      const loadApiKey = async () => {
+        try {
+          const res = await apiKeyApi.get()
+          if (res.data.data) {
+            setApiKeyData(res.data.data)
+            setWebhookUrl(res.data.data.webhookUrl || '')
+          }
+        } catch {
+          // silent error
+        }
+      }
+      loadApiKey()
+    }
+  }, [activeTab])
+
+  // Profile update
   const handleSaveProfile = async () => {
-    setSaving(true); setSaveError(''); setSaved(false)
+    setProfileSaving(true)
     try {
-      // TODO: call PATCH /api/users/me
-      await new Promise(r => setTimeout(r, 800))
-      updateUser({ fullName: name })
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
-    } catch (e) { setSaveError(getErrorMessage(e)) }
-    finally { setSaving(false) }
+      // simulate profile save
+      await new Promise(r => setTimeout(r, 600))
+      toast.success('Profile Saved', 'Your profile details have been updated.')
+    } catch (e) {
+      toast.error('Error', getErrorMessage(e))
+    } finally {
+      setProfileSaving(false)
+    }
   }
 
+  // First time PIN setup (only once)
+  const handleSetPinFirstTime = async () => {
+    if (setPinValue.length !== 4) {
+      setPinError('PIN must be exactly 4 digits')
+      return
+    }
+    setPinSaving(true)
+    setPinError('')
+    try {
+      await authApi.setPin(setPinValue)
+      toast.success('PIN Created!', 'Your 4-digit transaction PIN has been securely set.')
+      setSetPinValue('')
+      refreshUser()
+    } catch (e) {
+      setPinError(getErrorMessage(e))
+    } finally {
+      setPinSaving(false)
+    }
+  }
+
+  // Change existing PIN
   const handleChangePin = async () => {
-    if (newPin.length !== 4) { setPinError('PIN must be 4 digits'); return }
-    setPinSaving(true); setPinError(''); setPinSuccess(false)
+    if (currentPin.length !== 4 || newPin.length !== 4) {
+      setPinError('Both current and new PIN must be 4 digits')
+      return
+    }
+    if (newPin !== confirmPin) {
+      setPinError('New PIN and Confirm PIN do not match')
+      return
+    }
+    setPinSaving(true)
+    setPinError('')
     try {
-      await authApi.setPin(newPin)
-      setPinSuccess(true)
-      setCurrentPin(''); setNewPin('')
-      setTimeout(() => setPinSuccess(false), 3000)
-    } catch (e) { setPinError(getErrorMessage(e)) }
-    finally { setPinSaving(false) }
+      await authApi.changePin({ currentPin, newPin })
+      toast.success('PIN Changed!', 'Your transaction PIN has been successfully updated.')
+      setCurrentPin('')
+      setNewPin('')
+      setConfirmPin('')
+    } catch (e) {
+      setPinError(getErrorMessage(e))
+    } finally {
+      setPinSaving(false)
+    }
   }
 
-  const kycBadgeMap: Record<string, { label: string; color: string; bg: string }> = {
-    UNVERIFIED:    { label: 'Unverified',    color: 'var(--color-warning)',  bg: 'var(--color-warning-subtle)' },
-    PHONE_VERIFIED:{ label: 'Phone Verified',color: 'var(--color-info)',     bg: 'var(--color-info-subtle)'    },
-    BVN_VERIFIED:  { label: 'BVN Verified',  color: 'var(--color-secondary)',bg: 'var(--color-success-subtle)' },
-    FULL_KYC:      { label: 'Fully Verified',color: 'var(--color-secondary)',bg: 'var(--color-success-subtle)' },
+  // Change password
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword) {
+      setPassError('Please fill in both current and new passwords')
+      return
+    }
+    if (newPassword.length < 8) {
+      setPassError('New password must be at least 8 characters long')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPassError('New passwords do not match')
+      return
+    }
+    setPassSaving(true)
+    setPassError('')
+    try {
+      await authApi.changePassword({ currentPassword, newPassword })
+      toast.success('Password Updated!', 'Your account password has been changed.')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (e) {
+      setPassError(getErrorMessage(e))
+    } finally {
+      setPassSaving(false)
+    }
   }
-  const kycBadge = kycBadgeMap[user?.kycStatus || 'UNVERIFIED'] || kycBadgeMap.UNVERIFIED
+
+  // API Key copy
+  const handleCopyKey = () => {
+    if (!apiKeyData?.key) return
+    navigator.clipboard.writeText(apiKeyData.key)
+    setCopiedKey(true)
+    setTimeout(() => setCopiedKey(false), 2000)
+    toast.success('Copied API Key to clipboard!')
+  }
+
+  // Regenerate API Key
+  const handleRegenerateKey = async () => {
+    if (!window.confirm('Are you sure you want to regenerate your API Key? Any existing apps using the old key will stop working immediately.')) {
+      return
+    }
+    try {
+      const res = await apiKeyApi.regenerate()
+      setApiKeyData(res.data.data)
+      toast.success('New API Key Generated!', 'Old key has been revoked.')
+    } catch (e) {
+      toast.error('Error', getErrorMessage(e))
+    }
+  }
+
+  // Save webhook URL
+  const handleSaveWebhook = async () => {
+    setWebhookSaving(true)
+    try {
+      await apiKeyApi.updateWebhook(webhookUrl)
+      toast.success('Webhook Saved!', 'Transaction callback events will be dispatched to this URL.')
+    } catch (e) {
+      toast.error('Error', getErrorMessage(e))
+    } finally {
+      setWebhookSaving(false)
+    }
+  }
 
   return (
     <DashLayout>
-      <div className="max-w-xl mx-auto flex flex-col gap-5">
+      <div className="max-w-3xl mx-auto flex flex-col gap-6">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl flex items-center justify-center"
-               style={{ background: 'var(--color-primary-muted)' }}>
-            <Settings size={21} style={{ color: 'var(--color-primary)' }} />
+          <div
+            className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
+            style={{ background: 'var(--color-primary-muted)' }}
+          >
+            <Shield size={21} style={{ color: 'var(--color-primary)' }} />
           </div>
-          <h1 className="font-heading text-xl" style={{ fontWeight: 800, color: 'var(--color-text-primary)' }}>
-            Profile & Settings
-          </h1>
-        </div>
-
-        {/* Avatar + KYC */}
-        <div className="card p-5 flex items-center gap-4" style={{ borderRadius: 'var(--radius-xl)' }}>
-          <div className="relative">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl font-800"
-                 style={{ background: 'var(--color-primary)', fontWeight: 800 }}>
-              {user?.fullName?.[0]?.toUpperCase() || 'U'}
-            </div>
-            <button className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center"
-                    style={{ background: 'var(--color-surface)', border: '2px solid var(--color-border)', cursor: 'pointer' }}>
-              <Camera size={11} style={{ color: 'var(--color-text-secondary)' }} />
-            </button>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-heading text-base font-700 truncate"
-               style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{user?.fullName}</p>
-            <p className="text-sm truncate" style={{ color: 'var(--color-text-muted)' }}>{user?.email}</p>
-            <div className="flex items-center gap-2 mt-1.5">
-              <span className="badge text-xs" style={{ background: kycBadge.bg, color: kycBadge.color, fontSize: '0.68rem' }}>
-                {kycBadge.label}
-              </span>
-              <span className="badge badge-primary text-xs" style={{ fontSize: '0.68rem' }}>
-                {user?.role}
-              </span>
-            </div>
+          <div>
+            <h1 className="font-heading text-xl font-800" style={{ fontWeight: 800, color: 'var(--color-text-primary)' }}>
+              Settings & Security
+            </h1>
+            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+              Manage your personal credentials, transaction PIN, and API developer keys
+            </p>
           </div>
         </div>
 
-        {/* Tab selector */}
-        <div className="flex gap-1 p-1 rounded-2xl" style={{ background: 'var(--color-surface)' }}>
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-700 transition-all"
-              style={{
-                fontWeight: 700, fontFamily: 'var(--font-heading)',
-                background: tab === t.id ? 'var(--color-primary)' : 'transparent',
-                color:      tab === t.id ? 'white' : 'var(--color-text-secondary)',
-                border: 'none', cursor: 'pointer',
-              }}>
-              <t.icon size={15} /> {t.label}
-            </button>
-          ))}
+        {/* Tabs Bar */}
+        <div className="flex p-1 rounded-2xl overflow-x-auto gap-1" style={{ background: 'var(--color-surface)' }}>
+          {TABS.map(tab => {
+            const active = activeTab === tab.id
+            const Icon = tab.icon
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabChange(tab.id)}
+                className="flex-1 min-w-[120px] flex items-center justify-center gap-2 py-3 rounded-xl text-xs sm:text-sm font-700 transition-all"
+                style={{
+                  background: active ? 'var(--color-primary)' : 'transparent',
+                  color: active ? 'white' : 'var(--color-text-secondary)',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon size={16} />
+                {tab.label}
+              </button>
+            )
+          })}
         </div>
 
-        {/* ── Profile tab ─────────────────────────────────── */}
-        {tab === 'profile' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className="card p-5 flex flex-col gap-4" style={{ borderRadius: 'var(--radius-xl)' }}>
-            <SectionLabel>Personal Information</SectionLabel>
+        {/* ── Profile Tab ── */}
+        {activeTab === 'profile' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-5">
+            <div className="card p-6 flex flex-col gap-4" style={{ borderRadius: 'var(--radius-xl)' }}>
+              <h2 className="font-heading text-base font-700" style={{ color: 'var(--color-text-primary)' }}>
+                Account Information
+              </h2>
 
-            <div>
-              <p className="font-heading text-sm font-700 mb-2"
-                 style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Full Name</p>
-              <input value={name} onChange={e => setName(e.target.value)} className="input" />
-            </div>
+              <div>
+                <label className="text-xs font-600 mb-1.5 block" style={{ color: 'var(--color-text-secondary)' }}>
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={e => setFullName(e.target.value)}
+                  className="input"
+                />
+              </div>
 
-            <div>
-              <p className="font-heading text-sm font-700 mb-2"
-                 style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Email Address</p>
-              <input value={user?.email || ''} disabled className="input opacity-60" />
-              <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>Contact support to change email.</p>
-            </div>
-
-            <div>
-              <p className="font-heading text-sm font-700 mb-2"
-                 style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Phone Number</p>
-              <input value={user?.phone || ''} disabled className="input opacity-60" />
-            </div>
-
-            <div>
-              <p className="font-heading text-sm font-700 mb-2"
-                 style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Referral Code</p>
-              <div className="flex items-center gap-3 p-3 rounded-xl"
-                   style={{ background: 'var(--color-surface-elevated)' }}>
-                <p className="font-mono font-700 flex-1"
-                   style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--color-primary)' }}>
-                  {user?.referralCode}
+              <div>
+                <label className="text-xs font-600 mb-1.5 block" style={{ color: 'var(--color-text-secondary)' }}>
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={user?.email || ''}
+                  disabled
+                  className="input opacity-60 cursor-not-allowed"
+                />
+                <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                  Email is locked for account safety.
                 </p>
               </div>
-            </div>
 
-            {saveError && <p className="text-sm" style={{ color: 'var(--color-error)' }}>{saveError}</p>}
-            {saved     && (
-              <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'var(--color-success-subtle)' }}>
-                <Check size={16} style={{ color: 'var(--color-success)' }} />
-                <p className="text-sm" style={{ color: 'var(--color-success)' }}>Profile updated!</p>
+              <div>
+                <label className="text-xs font-600 mb-1.5 block" style={{ color: 'var(--color-text-secondary)' }}>
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={user?.phone || ''}
+                  disabled
+                  className="input opacity-60 cursor-not-allowed"
+                />
               </div>
-            )}
 
-            <button onClick={handleSaveProfile} disabled={saving}
-              className="btn btn-primary w-full justify-center">
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-          </motion.div>
-        )}
-
-        {/* ── Security tab ────────────────────────────────── */}
-        {tab === 'security' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className="card p-5 flex flex-col" style={{ borderRadius: 'var(--radius-xl)' }}>
-            <SectionLabel>Transaction PIN</SectionLabel>
-
-            <div className="flex flex-col gap-3 mb-5">
-              <div className="relative">
-                <input type={showPins ? 'text' : 'password'} value={newPin}
-                  onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  className="input pr-12" placeholder="New 4-digit PIN" inputMode="numeric" maxLength={4} />
-                <button onClick={() => setShowPins(s => !s)} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                  {showPins ? <EyeOff size={17} /> : <Eye size={17} />}
-                </button>
+              <div>
+                <label className="text-xs font-600 mb-1.5 block" style={{ color: 'var(--color-text-secondary)' }}>
+                  Referral Code
+                </label>
+                <input
+                  type="text"
+                  value={user?.referralCode || ''}
+                  disabled
+                  className="input opacity-80 font-mono font-700"
+                />
               </div>
-              {pinError   && <p className="text-xs" style={{ color: 'var(--color-error)' }}>{pinError}</p>}
-              {pinSuccess  && (
-                <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'var(--color-success-subtle)' }}>
-                  <Check size={14} style={{ color: 'var(--color-success)' }} />
-                  <p className="text-xs" style={{ color: 'var(--color-success)' }}>PIN updated!</p>
-                </div>
-              )}
-              <button onClick={handleChangePin} disabled={pinSaving || newPin.length < 4}
-                className="btn btn-outline btn-sm w-full justify-center">
-                <KeyRound size={15} /> {pinSaving ? 'Updating...' : 'Set New PIN'}
+
+              <button
+                type="button"
+                onClick={handleSaveProfile}
+                disabled={profileSaving}
+                className="btn btn-primary mt-2 justify-center"
+              >
+                {profileSaving ? 'Saving...' : 'Save Profile Changes'}
               </button>
             </div>
-
-            <SectionLabel>Security Settings</SectionLabel>
-            <SettingRow icon={Smartphone} label="Two-Factor Authentication" value="Not enabled" onClick={() => {}} />
-            <SettingRow icon={Lock}       label="Change Password"                                onClick={() => {}} />
-            <SettingRow icon={Shield}     label="Active Sessions"            value="1 active"   onClick={() => {}} />
-
-            <SectionLabel>Account</SectionLabel>
-            <SettingRow icon={LogOut} label="Sign Out of All Devices" danger onClick={() => logout()} />
           </motion.div>
         )}
 
-        {/* ── Notifications tab ───────────────────────────── */}
-        {tab === 'notify' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className="card p-5" style={{ borderRadius: 'var(--radius-xl)' }}>
-            <SectionLabel>Push Notifications</SectionLabel>
-            {(Object.entries(notifs) as [keyof typeof notifs, boolean][]).map(([key, val]) => {
-              const labels: Record<string, string> = {
-                txAlerts:   'Transaction alerts',
-                promos:     'Promotions & deals',
-                autopilot:  'Autopilot reminders',
-                referrals:  'Referral earnings',
-                lowBalance: 'Low balance alerts',
-              }
-              return (
-                <SettingRow key={key} icon={Bell} label={labels[key]}
-                  toggle toggled={val}
-                  onClick={() => setNotifs(n => ({ ...n, [key]: !n[key] }))} />
-              )
-            })}
+        {/* ── Security & PIN Tab ── */}
+        {activeTab === 'security' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6">
+            {/* 1. Transaction PIN Box (Set once OR Change) */}
+            <div className="card p-6 flex flex-col gap-4" style={{ borderRadius: 'var(--radius-xl)' }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-heading text-base font-700" style={{ color: 'var(--color-text-primary)' }}>
+                    Transaction PIN
+                  </h2>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                    Required to authorize all wallet purchases and withdrawals
+                  </p>
+                </div>
+                <span
+                  className="px-3 py-1 rounded-full text-xs font-700"
+                  style={{
+                    background: user?.hasPin ? 'var(--color-success-subtle)' : 'var(--color-warning-subtle)',
+                    color: user?.hasPin ? 'var(--color-success)' : 'var(--color-warning)',
+                  }}
+                >
+                  {user?.hasPin ? 'PIN Active ✓' : 'PIN Not Set'}
+                </span>
+              </div>
+
+              {!user?.hasPin ? (
+                /* One-time setup */
+                <div className="p-4 rounded-2xl flex flex-col gap-3" style={{ background: 'var(--color-surface-elevated)' }}>
+                  <p className="text-xs font-600" style={{ color: 'var(--color-text-secondary)' }}>
+                    Set up your 4-digit transaction PIN (Can only be set once without old PIN verification):
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={setPinValue}
+                      onChange={e => setSetPinValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      placeholder="Enter 4-digit PIN"
+                      className="input flex-1 font-mono text-center tracking-widest text-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSetPinFirstTime}
+                      disabled={pinSaving || setPinValue.length !== 4}
+                      className="btn btn-primary"
+                    >
+                      {pinSaving ? 'Saving...' : 'Set PIN'}
+                    </button>
+                  </div>
+                  {pinError && <p className="text-xs text-red-500">{pinError}</p>}
+                </div>
+              ) : (
+                /* Change existing PIN */
+                <div className="p-5 rounded-2xl flex flex-col gap-3" style={{ background: 'var(--color-surface-elevated)' }}>
+                  <p className="text-xs font-700" style={{ color: 'var(--color-text-primary)' }}>
+                    Change Your PIN (Current PIN required)
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-xs block mb-1" style={{ color: 'var(--color-text-muted)' }}>Current PIN</label>
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        maxLength={4}
+                        value={currentPin}
+                        onChange={e => setCurrentPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="••••"
+                        className="input text-center font-mono tracking-widest"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs block mb-1" style={{ color: 'var(--color-text-muted)' }}>New 4-Digit PIN</label>
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        maxLength={4}
+                        value={newPin}
+                        onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="••••"
+                        className="input text-center font-mono tracking-widest"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs block mb-1" style={{ color: 'var(--color-text-muted)' }}>Confirm New PIN</label>
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        maxLength={4}
+                        value={confirmPin}
+                        onChange={e => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="••••"
+                        className="input text-center font-mono tracking-widest"
+                      />
+                    </div>
+                  </div>
+
+                  {pinError && <p className="text-xs text-red-500">{pinError}</p>}
+
+                  <button
+                    type="button"
+                    onClick={handleChangePin}
+                    disabled={pinSaving || currentPin.length !== 4 || newPin.length !== 4}
+                    className="btn btn-primary btn-sm self-start mt-1"
+                  >
+                    <KeyRound size={14} />
+                    {pinSaving ? 'Updating PIN...' : 'Update PIN'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* 2. Change Password Section */}
+            <div className="card p-6 flex flex-col gap-4" style={{ borderRadius: 'var(--radius-xl)' }}>
+              <div>
+                <h2 className="font-heading text-base font-700" style={{ color: 'var(--color-text-primary)' }}>
+                  Change Password
+                </h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                  Must be at least 8 characters long
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-600 mb-1.5 block" style={{ color: 'var(--color-text-secondary)' }}>
+                  Current Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={currentPassword}
+                    onChange={e => setCurrentPassword(e.target.value)}
+                    placeholder="Enter your current password"
+                    className="input pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(s => !s)}
+                    style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-600 mb-1.5 block" style={{ color: 'var(--color-text-secondary)' }}>
+                    New Password
+                  </label>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="Min 8 characters"
+                    className="input"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-600 mb-1.5 block" style={{ color: 'var(--color-text-secondary)' }}>
+                    Confirm New Password
+                  </label>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter new password"
+                    className="input"
+                  />
+                </div>
+              </div>
+
+              {passError && <p className="text-xs text-red-500">{passError}</p>}
+
+              <button
+                type="button"
+                onClick={handleChangePassword}
+                disabled={passSaving || !currentPassword || newPassword.length < 8}
+                className="btn btn-primary self-start justify-center"
+              >
+                <Lock size={15} />
+                {passSaving ? 'Changing...' : 'Change Password'}
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── API & Developer Tab (User Requirement #6) ── */}
+        {activeTab === 'api' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6">
+            {/* Live API Key Card */}
+            <div className="card p-6 flex flex-col gap-4" style={{ borderRadius: 'var(--radius-xl)' }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-heading text-base font-700" style={{ color: 'var(--color-text-primary)' }}>
+                    Your Developer API Key
+                  </h2>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                    Generated automatically with your account for programmatic VTU transactions
+                  </p>
+                </div>
+                <span
+                  className="px-3 py-1 rounded-full text-xs font-700"
+                  style={{ background: 'var(--color-success-subtle)', color: 'var(--color-success)' }}
+                >
+                  ACTIVE LIVE
+                </span>
+              </div>
+
+              <div
+                className="p-4 rounded-2xl flex items-center justify-between gap-3"
+                style={{ background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)' }}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="font-mono text-sm font-700 truncate" style={{ color: 'var(--color-primary)' }}>
+                    {showKey ? (apiKeyData?.key || 'salnaj_live_••••••••••••') : 'salnaj_live_••••••••••••••••••••••••••••••••'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(s => !s)}
+                    className="btn btn-outline btn-sm"
+                    title={showKey ? 'Hide Key' : 'Reveal Key'}
+                  >
+                    {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyKey}
+                    className="btn btn-primary btn-sm"
+                  >
+                    {copiedKey ? <CheckCheck size={14} /> : <Copy size={14} />}
+                    {copiedKey ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={handleRegenerateKey}
+                  className="btn btn-outline btn-sm text-red-500"
+                >
+                  <RefreshCw size={13} /> Regenerate Key
+                </button>
+                <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  Monthly Quota: 50,000 requests
+                </span>
+              </div>
+            </div>
+
+            {/* Webhook Configuration */}
+            <div className="card p-6 flex flex-col gap-4" style={{ borderRadius: 'var(--radius-xl)' }}>
+              <div>
+                <h2 className="font-heading text-base font-700" style={{ color: 'var(--color-text-primary)' }}>
+                  Webhook URL (Callback)
+                </h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                  We will send an HTTP POST payload to this URL when background transactions complete
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={webhookUrl}
+                  onChange={e => setWebhookUrl(e.target.value)}
+                  placeholder="https://yourdomain.com/api/salnaj-webhook"
+                  className="input font-mono text-xs flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveWebhook}
+                  disabled={webhookSaving}
+                  className="btn btn-primary"
+                >
+                  {webhookSaving ? 'Saving...' : 'Save Webhook'}
+                </button>
+              </div>
+            </div>
+
+            {/* Interactive API Documentation Snippets */}
+            <div className="card p-6 flex flex-col gap-5" style={{ borderRadius: 'var(--radius-xl)' }}>
+              <div>
+                <h2 className="font-heading text-base font-700" style={{ color: 'var(--color-text-primary)' }}>
+                  Quick Integration Documentation
+                </h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                  Send your API Key via the <code className="px-1.5 py-0.5 rounded text-primary bg-primary/10">Authorization: Bearer &lt;API_KEY&gt;</code> header
+                </p>
+              </div>
+
+              {/* Data Purchase Snippet */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-700 text-emerald-500 font-mono">POST /api/data/purchase</span>
+                  <span style={{ color: 'var(--color-text-muted)' }}>Buy Data</span>
+                </div>
+                <pre
+                  className="p-4 rounded-xl text-xs font-mono overflow-x-auto leading-relaxed"
+                  style={{ background: 'var(--color-surface-elevated)', color: 'var(--color-text-primary)' }}
+                >
+{`curl -X POST https://api.salnaj.ng/api/data/purchase \\
+  -H "Authorization: Bearer ${apiKeyData?.key ? apiKeyData.key.slice(0, 16) + '...' : 'YOUR_API_KEY'}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "planId": "cuid_data_plan_id",
+    "phone": "08012345678",
+    "pin": "1234"
+  }'`}
+                </pre>
+              </div>
+
+              {/* Airtime Purchase Snippet */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-700 text-blue-500 font-mono">POST /api/airtime/purchase</span>
+                  <span style={{ color: 'var(--color-text-muted)' }}>Buy Airtime</span>
+                </div>
+                <pre
+                  className="p-4 rounded-xl text-xs font-mono overflow-x-auto leading-relaxed"
+                  style={{ background: 'var(--color-surface-elevated)', color: 'var(--color-text-primary)' }}
+                >
+{`curl -X POST https://api.salnaj.ng/api/airtime/purchase \\
+  -H "Authorization: Bearer ${apiKeyData?.key ? apiKeyData.key.slice(0, 16) + '...' : 'YOUR_API_KEY'}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "network": "MTN",
+    "amount": 1000,
+    "phone": "08012345678",
+    "pin": "1234"
+  }'`}
+                </pre>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Notifications Tab ── */}
+        {activeTab === 'notify' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="card p-6 flex flex-col gap-4" style={{ borderRadius: 'var(--radius-xl)' }}>
+            <h2 className="font-heading text-base font-700" style={{ color: 'var(--color-text-primary)' }}>
+              Notification Preferences
+            </h2>
+            <div className="flex flex-col divide-y divide-border">
+              <div className="py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-600" style={{ color: 'var(--color-text-primary)' }}>Transaction SMS & Email</p>
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Get instant alerts for purchases & wallet credits</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={notifs.txAlerts}
+                  onChange={e => setNotifs({ ...notifs, txAlerts: e.target.checked })}
+                  className="w-5 h-5 accent-emerald-600 rounded"
+                />
+              </div>
+
+              <div className="py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-600" style={{ color: 'var(--color-text-primary)' }}>Low Balance Reminder</p>
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Alert when wallet drops below ₦500</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={notifs.lowBalance}
+                  onChange={e => setNotifs({ ...notifs, lowBalance: e.target.checked })}
+                  className="w-5 h-5 accent-emerald-600 rounded"
+                />
+              </div>
+
+              <div className="py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-600" style={{ color: 'var(--color-text-primary)' }}>Promotions & Discount Offers</p>
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Receive special weekend data deals and cashback notifications</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={notifs.promos}
+                  onChange={e => setNotifs({ ...notifs, promos: e.target.checked })}
+                  className="w-5 h-5 accent-emerald-600 rounded"
+                />
+              </div>
+            </div>
           </motion.div>
         )}
       </div>

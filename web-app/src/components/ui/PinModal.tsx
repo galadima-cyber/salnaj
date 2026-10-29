@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Lock, Loader2 } from 'lucide-react'
 
+import { getErrorMessage } from '@/services/api'
+
 interface PinModalProps {
   isOpen:      boolean
   onClose:     () => void
@@ -41,7 +43,7 @@ export function PinModal({ isOpen, onClose, onConfirm, title = 'Enter Transactio
     try {
       await onConfirm(code)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Incorrect PIN'
+      const msg = getErrorMessage(err)
       setError(msg); setPin(['','','',''])
       setShake(true); setTimeout(() => setShake(false), 500)
       refs[0].current?.focus()

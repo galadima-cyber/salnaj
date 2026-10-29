@@ -6,8 +6,10 @@ import { PinModal }     from '@/components/ui/PinModal'
 import { ReceiptModal } from '@/components/ui/ReceiptModal'
 import { useToast }     from '@/components/ui/Toast'
 import { airtimeApi }   from '@/services/endpoints'
+import { getErrorMessage } from '@/services/api'
 import { useAuth } from '@/context/AuthContext'
 import { formatNaira, detectNetwork } from '@/utils'
+import { NetworkBadge } from '@/components/ui/ProviderIcons'
 
 const NETWORKS = [
   { id: 'MTN',      label: 'MTN',     color: '#FFCC00', bg: 'rgba(255,204,0,0.12)', textColor: '#997700' },
@@ -46,12 +48,22 @@ export default function BuyAirtimePage() {
   }
 
   const handleConfirmPin = async (pin: string) => {
-    const res = await airtimeApi.purchase({ network, phone, amount: parseFloat(amount), pin })
-    setPinOpen(false)
-    const ok = res.data.data?.status === 'SUCCESS'
-    setReceipt({ open: true, status: ok ? 'success' : 'failed', ref: res.data.data?.reference || '' })
-    if (ok) { refreshBalance(); toast.success('Airtime Sent!', `${amount} ${network} airtime delivered`) }
-    else    { toast.error('Transaction Failed', 'Your wallet has been refunded') }
+    try {
+      const res = await airtimeApi.purchase({ network, phone, amount: parseFloat(amount), pin })
+      setPinOpen(false)
+      const ok = res.data.data?.status === 'SUCCESS'
+      setReceipt({ open: true, status: ok ? 'success' : 'failed', ref: res.data.data?.reference || '' })
+      if (ok) {
+        refreshBalance()
+        toast.success('Airtime Delivered Successfully!', `₦${amount} ${network} airtime sent to ${phone}`)
+      } else {
+        toast.error('Transaction Could Not Complete', 'The telecom network could not deliver airtime at this time. Your wallet was refunded.')
+      }
+    } catch (err) {
+      const msg = getErrorMessage(err)
+      toast.error('Airtime Purchase Failed', msg)
+      throw err
+    }
   }
 
   return (
@@ -80,11 +92,8 @@ export default function BuyAirtimePage() {
                   borderColor: network === n.id ? n.color : 'var(--color-border)',
                   cursor: 'pointer',
                 }}>
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center font-heading font-800 text-sm"
-                     style={{ background: n.bg, color: n.textColor, fontWeight: 800 }}>
-                  {n.label[0]}
-                </div>
-                <span className="text-xs font-600" style={{ color: network === n.id ? n.textColor : 'var(--color-text-secondary)', fontWeight: 600 }}>
+                <NetworkBadge network={n.id} size={40} />
+                <span className="text-xs font-700" style={{ color: network === n.id ? n.textColor : 'var(--color-text-secondary)', fontWeight: 700 }}>
                   {n.label}
                 </span>
               </button>

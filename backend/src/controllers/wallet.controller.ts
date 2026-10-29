@@ -1,14 +1,15 @@
 import { Request, Response } from 'express'
-import { Decimal }  from '@prisma/client/runtime/library'
-import prisma        from '../config/database'
+import { Decimal } from '@prisma/client/runtime/library'
+import prisma from '../config/database'
 import { paystackService } from '../services/paystack.service'
-import { walletService   } from '../services/wallet.service'
-import { emailService    } from '../services/email.service'
-import * as R              from '../utils/response'
+import { walletService } from '../services/wallet.service'
+import { emailService } from '../services/email.service'
+import * as R from '../utils/response'
 import { generateRef, formatNaira } from '../utils'
 import { AuthRequest } from '../types'
-import { env }         from '../config/env'
-import { logger }      from '../config/logger'
+import { env } from '../config/env'
+import { logger } from '../config/logger'
+import { createNotification } from './notification.controller'
 
 // ─── GET /api/wallet/balance ──────────────────────────────────
 
@@ -28,7 +29,7 @@ export async function initiateFunding(req: any, res: Response): Promise<void> {
   }
 
   const user = await prisma.user.findUnique({
-    where:  { id: userId },
+    where: { id: userId },
     select: { email: true, fullName: true },
   })
   if (!user) { R.notFound(res, 'User not found'); return }
@@ -47,7 +48,7 @@ export async function initiateFunding(req: any, res: Response): Promise<void> {
   })
 
   const { authorizationUrl, accessCode } = await paystackService.initializePayment({
-    email:    user.email,
+    email: user.email,
     amount,
     reference,
     metadata: { userId, fullName: user.fullName },
@@ -61,7 +62,7 @@ export async function initiateFunding(req: any, res: Response): Promise<void> {
 
 export async function paystackWebhook(req: Request, res: Response): Promise<void> {
   const signature = req.headers['x-paystack-signature'] as string
-  const rawBody   = req.body
+  const rawBody = req.body
 
   // 1. Always respond 200 immediately (Paystack requirement)
   res.status(200).json({ received: true })
@@ -75,8 +76,8 @@ export async function paystackWebhook(req: Request, res: Response): Promise<void
   const event = typeof rawBody === 'string'
     ? JSON.parse(rawBody)
     : Buffer.isBuffer(rawBody)
-    ? JSON.parse(rawBody.toString('utf-8'))
-    : rawBody
+      ? JSON.parse(rawBody.toString('utf-8'))
+      : rawBody
 
   if (event.event !== 'charge.success') return
 
@@ -85,7 +86,7 @@ export async function paystackWebhook(req: Request, res: Response): Promise<void
 
   // 3. Idempotency — check if already processed
   const funding = await prisma.walletFunding.findUnique({
-    where:  { paystackRef: reference },
+    where: { paystackRef: reference },
     select: { id: true, userId: true, isProcessed: true, amount: true },
   })
 
@@ -105,8 +106,8 @@ export async function paystackWebhook(req: Request, res: Response): Promise<void
     // 4. Credit wallet + mark processed — all in one DB transaction
     await prisma.$transaction(async (tx) => {
       await walletService.credit({
-        userId:    funding.userId,
-        amount:    amountNaira,
+        userId: funding.userId,
+        amount: amountNaira,
         prismaCtx: tx as typeof prisma,
       })
 
@@ -114,18 +115,18 @@ export async function paystackWebhook(req: Request, res: Response): Promise<void
         where: { paystackRef: reference },
         data: {
           paystackStatus: 'success',
-          isProcessed:    true,
-          processedAt:    new Date(),
-          fee:            new Decimal((amountNaira * 0.015) > 2000 ? 2000 : amountNaira * 0.015),
+          isProcessed: true,
+          processedAt: new Date(),
+          fee: new Decimal((amountNaira * 0.015) > 2000 ? 2000 : amountNaira * 0.015),
         },
       })
 
       await tx.transaction.create({
         data: {
-          userId:     funding.userId,
-          type:       'WALLET_FUND',
-          amount:     new Decimal(amountNaira),
-          status:     'SUCCESS',
+          userId: funding.userId,
+          type: 'WALLET_FUND',
+          amount: new Decimal(amountNaira),
+          status: 'SUCCESS',
           reference,
           paystackRef: reference,
           completedAt: new Date(),
@@ -138,14 +139,14 @@ export async function paystackWebhook(req: Request, res: Response): Promise<void
 
     // 6. Send email receipt (non-blocking)
     const user = await prisma.user.findUnique({
-      where:  { id: funding.userId },
+      where: { id: funding.userId },
       select: { email: true, fullName: true },
     })
     if (user) {
       emailService.sendTransactionReceipt(user.email, user.fullName, {
         type: 'Wallet Funding', amount: formatNaira(amountNaira),
         reference, status: 'SUCCESS',
-      }).catch(() => {})
+      }).catch(() => { })
     }
 
     logger.info('Wallet funded via Paystack webhook', { userId: funding.userId, amountNaira })
@@ -158,15 +159,15 @@ export async function paystackWebhook(req: Request, res: Response): Promise<void
 
 export async function getWalletHistory(req: any, res: Response): Promise<void> {
   const userId = req.user!.userId
-  const page   = Math.max(1, parseInt(req.query.page as string || '1'))
-  const limit  = Math.min(50, parseInt(req.query.limit as string || '20'))
+  const page = Math.max(1, parseInt(req.query.page as string || '1'))
+  const limit = Math.min(50, parseInt(req.query.limit as string || '20'))
 
   const [transactions, total] = await prisma.$transaction([
     prisma.transaction.findMany({
-      where:   { userId },
+      where: { userId },
       orderBy: { createdAt: 'desc' },
-      skip:    (page - 1) * limit,
-      take:    limit,
+      skip: (page - 1) * limit,
+      take: limit,
       select: {
         id: true, type: true, amount: true, status: true,
         reference: true, createdAt: true, network: true, planName: true,
@@ -186,7 +187,7 @@ async function processReferralBonus(userId: string, fundingAmount: number): Prom
   if (fundingAmount < env.REFERRAL_MIN_FUNDING_FOR_BONUS) return
 
   const user = await prisma.user.findUnique({
-    where:  { id: userId },
+    where: { id: userId },
     select: { referredById: true },
   })
   if (!user?.referredById) return
@@ -200,17 +201,17 @@ async function processReferralBonus(userId: string, fundingAmount: number): Prom
   await prisma.$transaction(async (tx) => {
     // Referee gets signup bonus
     await walletService.credit({
-      userId:    userId,
-      amount:    env.REFERRAL_SIGNUP_BONUS,
-      type:      'bonus',
+      userId: userId,
+      amount: env.REFERRAL_SIGNUP_BONUS,
+      type: 'bonus',
       prismaCtx: tx as typeof prisma,
     })
 
-    // Referrer gets transaction bonus
+    // Referrer gets transaction bonus into separate referralBalance
     await walletService.credit({
-      userId:    user.referredById!,
-      amount:    env.REFERRAL_TRANSACTION_BONUS,
-      type:      'bonus',
+      userId: user.referredById!,
+      amount: env.REFERRAL_TRANSACTION_BONUS,
+      type: 'referral',
       prismaCtx: tx as typeof prisma,
     })
 
@@ -218,22 +219,31 @@ async function processReferralBonus(userId: string, fundingAmount: number): Prom
       data: [
         {
           referrerId: user.referredById!,
-          refereeId:  userId,
-          amount:     new Decimal(env.REFERRAL_TRANSACTION_BONUS),
-          type:       'SIGNUP_BONUS',
-          isPaid:     true,
-          paidAt:     new Date(),
-        },
-        {
-          referrerId: user.referredById!,
-          refereeId:  userId,
-          amount:     new Decimal(env.REFERRAL_SIGNUP_BONUS),
-          type:       'SIGNUP_BONUS',
-          isPaid:     true,
-          paidAt:     new Date(),
+          refereeId: userId,
+          amount: new Decimal(env.REFERRAL_TRANSACTION_BONUS),
+          type: 'SIGNUP_BONUS',
+          isPaid: true,
+          paidAt: new Date(),
         },
       ],
     })
+  })
+
+  // Notify referrer & referee
+  createNotification({
+    userId: user.referredById!,
+    title: 'Referral Bonus Received',
+    message: `You earned ₦${env.REFERRAL_TRANSACTION_BONUS.toLocaleString()} from a referral! It is saved in your Referral Balance.`,
+    type: 'PROMO',
+    actionUrl: '/referrals',
+  })
+
+  createNotification({
+    userId: userId,
+    title: 'Welcome Bonus Credited',
+    message: `Congratulations! ₦${env.REFERRAL_SIGNUP_BONUS.toLocaleString()} signup bonus has been credited to your bonus wallet.`,
+    type: 'PROMO',
+    actionUrl: '/wallet',
   })
 
   logger.info('Referral bonus processed', { refereeId: userId, referrerId: user.referredById })
@@ -245,70 +255,117 @@ export async function verifyFunding(req: any, res: Response): Promise<void> {
   const { reference } = req.body
   if (!reference) { R.badRequest(res, 'Payment reference is required'); return }
 
+  // 1. Check if already processed (idempotency)
   const funding = await prisma.walletFunding.findUnique({
-    where:  { paystackRef: reference },
-    select: { id: true, userId: true, isProcessed: true, amount: true },
+    where: { paystackRef: reference },
+    select: { id: true, userId: true, isProcessed: true, amount: true, paystackStatus: true },
   })
 
   if (!funding) {
-    R.notFound(res, 'Funding record not found')
+    R.notFound(res, 'Payment record not found. Please ensure you used the correct reference.')
     return
   }
 
+  // Already credited — return success immediately
   if (funding.isProcessed) {
     const balances = await walletService.getBalance(funding.userId)
     R.ok(res, 'Wallet already credited', { status: 'success', balance: balances.main })
     return
   }
 
-  // Verify from Paystack directly
+  // 2. Verify directly with Paystack API
   try {
     const verification = await paystackService.verifyPayment(reference)
-    if (verification.status !== 'success') {
-      R.badRequest(res, `Payment verification status: ${verification.status}`)
+
+    if (verification.status === 'success') {
+      const amountNaira = verification.amount
+
+      // Double-check idempotency — another request may have processed while we waited
+      const check = await prisma.walletFunding.findUnique({
+        where: { paystackRef: reference },
+        select: { isProcessed: true },
+      })
+      if (check?.isProcessed) {
+        const balances = await walletService.getBalance(funding.userId)
+        R.ok(res, 'Wallet credited successfully', { status: 'success', balance: balances.main })
+        return
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await walletService.credit({
+          userId: funding.userId,
+          amount: amountNaira,
+          prismaCtx: tx as typeof prisma,
+        })
+
+        await tx.walletFunding.update({
+          where: { paystackRef: reference },
+          data: {
+            paystackStatus: 'success',
+            isProcessed: true,
+            processedAt: new Date(),
+            fee: new Decimal((amountNaira * 0.015) > 2000 ? 2000 : amountNaira * 0.015),
+          },
+        })
+
+        await tx.transaction.create({
+          data: {
+            userId: funding.userId,
+            type: 'WALLET_FUND',
+            amount: new Decimal(amountNaira),
+            status: 'SUCCESS',
+            reference,
+            paystackRef: reference,
+            completedAt: new Date(),
+          },
+        })
+      })
+
+      // Referral bonus (fire and forget)
+      processReferralBonus(funding.userId, amountNaira).catch(() => { })
+
+      // Email receipt (fire and forget)
+      const user = await prisma.user.findUnique({
+        where: { id: funding.userId },
+        select: { email: true, fullName: true },
+      })
+      if (user) {
+        emailService.sendTransactionReceipt(user.email, user.fullName, {
+          type: 'Wallet Funding', amount: formatNaira(amountNaira),
+          reference, status: 'SUCCESS',
+        }).catch(() => { })
+      }
+
+      const balances = await walletService.getBalance(funding.userId)
+      logger.info('Wallet funded via verify endpoint', { userId: funding.userId, amountNaira })
+      R.ok(res, 'Wallet credited successfully', { status: 'success', balance: balances.main })
       return
     }
 
-    const amountNaira = verification.amount
-
-    await prisma.$transaction(async (tx) => {
-      await walletService.credit({
-        userId:    funding.userId,
-        amount:    amountNaira,
-        prismaCtx: tx as typeof prisma,
+    // Payment not successful yet — tell frontend to retry
+    if (verification.status === 'pending' || verification.status === 'processing') {
+      R.ok(res, 'Payment is still being processed. Please wait a moment.', {
+        status: 'pending',
       })
+      return
+    }
 
-      await tx.walletFunding.update({
-        where: { paystackRef: reference },
-        data: {
-          paystackStatus: 'success',
-          isProcessed:    true,
-          processedAt:    new Date(),
-          fee:            new Decimal((amountNaira * 0.015) > 2000 ? 2000 : amountNaira * 0.015),
-        },
-      })
+    // Payment failed or abandoned
+    await prisma.walletFunding.update({
+      where: { paystackRef: reference },
+      data: { paystackStatus: verification.status },
+    }).catch(() => { })
 
-      await tx.transaction.create({
-        data: {
-          userId:     funding.userId,
-          type:       'WALLET_FUND',
-          amount:     new Decimal(amountNaira),
-          status:     'SUCCESS',
-          reference,
-          paystackRef: reference,
-          completedAt: new Date(),
-        },
-      })
-    })
+    R.badRequest(res, `Payment was not completed. Status: ${verification.status}. No amount was deducted from your bank account.`)
 
-    // Referral bonus check (fire and forget)
-    processReferralBonus(funding.userId, amountNaira).catch(() => {})
-
-    const balances = await walletService.getBalance(funding.userId)
-    R.ok(res, 'Wallet credited successfully', { status: 'success', balance: balances.main })
   } catch (err: unknown) {
-    logger.error('Paystack verification error', { reference, err: (err as Error).message })
-    R.serverError(res, 'Failed to verify payment with Paystack')
+    const errMsg = (err as Error).message || ''
+    logger.error('Paystack verification error', { reference, err: errMsg })
+
+    // Don't expose internal errors — tell client the payment is being processed
+    R.ok(res, 'Payment verification is taking longer than expected. If your bank was debited, your wallet will be credited automatically.', {
+      status: 'pending',
+    })
   }
 }
 

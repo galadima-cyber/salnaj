@@ -10,6 +10,15 @@ import { getErrorMessage } from '@/services/api'
 import { useToast } from '@/components/ui/Toast'
 import { formatNaira }  from '@/utils'
 
+import { DstvLogo, GotvLogo, StarTimesLogo, ShowmaxLogo } from '@/components/ui/ProviderIcons'
+
+const PROVIDER_ICONS: Record<string, React.ElementType> = {
+  dstv: DstvLogo,
+  gotv: GotvLogo,
+  startimes: StarTimesLogo,
+  showmax: ShowmaxLogo,
+}
+
 const PROVIDERS = [
   {
     id: 'dstv', label: 'DSTV', color: '#1D4ED8', bg: 'rgba(29,78,216,0.10)',
@@ -109,21 +118,21 @@ export default function CableTvPage() {
         <div className="card p-5" style={{ borderRadius: 'var(--radius-xl)' }}>
           <p className="font-heading text-sm font-700 mb-3" style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Select Provider</p>
           <div className="grid grid-cols-3 gap-3">
-            {PROVIDERS.map(p => (
-              <button key={p.id} onClick={() => { setProvider(p.id); setDecoderInfo(null); setSelectedPkg(null) }}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all"
-                style={{
-                  background:  provider === p.id ? p.bg : 'var(--color-surface-elevated)',
-                  borderColor: provider === p.id ? p.color : 'var(--color-border)',
-                  cursor: 'pointer',
-                }}>
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center font-heading font-800 text-xs text-white"
-                     style={{ background: p.color, fontWeight: 800 }}>
-                  {p.label.slice(0, 2).toUpperCase()}
-                </div>
-                <span className="text-xs font-700" style={{ fontWeight: 700, color: provider === p.id ? p.color : 'var(--color-text-secondary)' }}>{p.label}</span>
-              </button>
-            ))}
+            {PROVIDERS.map(p => {
+              const IconComp = PROVIDER_ICONS[p.id] || DstvLogo
+              return (
+                <button key={p.id} onClick={() => { setProvider(p.id); setDecoderInfo(null); setSelectedPkg(null) }}
+                  className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all"
+                  style={{
+                    background:  provider === p.id ? p.bg : 'var(--color-surface-elevated)',
+                    borderColor: provider === p.id ? p.color : 'var(--color-border)',
+                    cursor: 'pointer',
+                  }}>
+                  <IconComp size={38} />
+                  <span className="text-xs font-700" style={{ fontWeight: 700, color: provider === p.id ? p.color : 'var(--color-text-secondary)' }}>{p.label}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
 

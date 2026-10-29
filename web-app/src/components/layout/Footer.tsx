@@ -9,7 +9,7 @@ const footerLinks = {
     { label: 'Pay Electricity', href: '/electricity' },
     { label: 'Cable TV', href: '/cable-tv' },
     { label: 'Education Pins', href: '/education' },
-    { label: 'Betting Wallet', href: '/betting' },
+    { label: 'Airtime to Cash', href: '/airtime-cash' },
   ],
   Tools: [
     { label: 'Smart Buy', href: '/smart-buy' },

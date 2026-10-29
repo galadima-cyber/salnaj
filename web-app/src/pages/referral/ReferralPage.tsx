@@ -1,196 +1,371 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   Users, Copy, CheckCheck, Share2, Gift,
-  TrendingUp, ChevronRight, Sparkles,
+  ArrowRight, Clock, AlertCircle, Wallet, ArrowDownLeft,
 } from 'lucide-react'
-import { DashLayout }   from '@/components/layout/DashLayout'
+import { DashLayout } from '@/components/layout/DashLayout'
+import { PinModal } from '@/components/ui/PinModal'
+import { referralApi, ReferralStats } from '@/services/endpoints'
+import { getErrorMessage } from '@/services/api'
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { brandConfig }  from '@/config/brand.config'
-import { formatNaira }  from '@/utils'
-
-// Mock earnings — replace with real API call
-const MOCK_EARNINGS = [
-  { name: 'Fatimah A.',  phone: '0801***678', earned: 150, date: '2 days ago',  type: 'Signup Bonus' },
-  { name: 'Emeka O.',    phone: '0812***901', earned: 150, date: '5 days ago',  type: 'Signup Bonus' },
-  { name: 'Rashida M.',  phone: '0903***234', earned: 150, date: '1 week ago',  type: 'Signup Bonus' },
-]
-
-const HOW_IT_WORKS = [
-  { step: '01', title: 'Share your link', desc: 'Copy your unique referral link and share it with friends on WhatsApp, Instagram, or anywhere.' },
-  { step: '02', title: 'Friend signs up', desc: 'Your friend creates an account using your referral code.' },
-  { step: '03', title: 'Both earn!', desc: `Your friend gets ₦${brandConfig.limits.minWalletFunding} bonus. You earn ₦150 when they fund their wallet.` },
-]
+import { formatNaira } from '@/utils'
 
 export default function ReferralPage() {
-  const { user } = useAuth()
-  const [copied, setCopied] = useState(false)
+  const { user, refreshBalance } = useAuth()
+  const toast = useToast()
 
-  const referralCode = user?.referralCode || 'SNJ-XXXXX'
-  const referralLink = `${window.location.origin}/register?ref=${referralCode}`
-  const totalEarned  = MOCK_EARNINGS.reduce((s, e) => s + e.earned, 0)
+  const [stats,       setStats]       = useState<ReferralStats | null>(null)
+  const [loading,     setLoading]     = useState(true)
+  const [copiedCode,  setCopiedCode]  = useState(false)
+  const [copiedLink,  setCopiedLink]  = useState(false)
+  const [withdrawOpen,setWithdrawOpen]= useState(false)
+  const [withdrawAmt, setWithdrawAmt] = useState('500')
+  const [withdrawErr, setWithdrawErr] = useState('')
+  const [pinOpen,     setPinOpen]     = useState(false)
 
-  const handleCopy = async (text: string) => {
-    await navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const referralCode = stats?.referralCode || user?.referralCode || 'SALNAJ'
+  const referralLink = stats?.referralLink || `${window.location.origin}/register?ref=${referralCode}`
+  const referralBal  = stats?.referralBalance ?? 0
+
+  const loadStats = async () => {
+    setLoading(true)
+    try {
+      const res = await referralApi.getStats()
+      if (res.data.data) {
+        setStats(res.data.data)
+      }
+    } catch {
+      // Fallback
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadStats()
+  }, [])
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(referralCode)
+    setCopiedCode(true)
+    setTimeout(() => setCopiedCode(false), 2000)
+    toast.success('Referral Code Copied!', referralCode)
+  }
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(referralLink)
+    setCopiedLink(true)
+    setTimeout(() => setCopiedLink(false), 2000)
+    toast.success('Referral Link Copied!', referralLink)
   }
 
   const handleShare = () => {
-    const text = `🚀 Join me on Salnaj — Nigeria's smartest VTU platform!\n\nBuy data, airtime, and pay bills instantly. Use my referral link and get a ₦100 bonus:\n\n${referralLink}`
+    const text = `🚀 Join me on Salnaj — Nigeria's fastest & most reliable VTU platform!\n\nBuy data, airtime, and pay bills instantly. Sign up with my referral code ${referralCode} and get a ₦100 bonus on your first wallet funding:\n\n${referralLink}`
     if (navigator.share) {
-      navigator.share({ title: 'Join Salnaj', text, url: referralLink })
+      navigator.share({ title: 'Join Salnaj', text, url: referralLink }).catch(() => {})
     } else {
-      handleCopy(text)
+      handleCopyLink()
+    }
+  }
+
+  const handleStartWithdraw = () => {
+    const num = parseFloat(withdrawAmt) || 0
+    if (num < 500) {
+      setWithdrawErr('Minimum withdrawal is ₦500')
+      return
+    }
+    if (num > referralBal) {
+      setWithdrawErr('Amount exceeds your current referral balance')
+      return
+    }
+    setWithdrawErr('')
+    setWithdrawOpen(false)
+    setPinOpen(true)
+  }
+
+  const handleConfirmPin = async (pin: string) => {
+    const num = parseFloat(withdrawAmt) || 0
+    try {
+      const res = await referralApi.withdraw({ amount: num, pin })
+      setPinOpen(false)
+      toast.success('Funds Transferred!', res.data.message || `₦${num.toLocaleString()} transferred to your main wallet!`)
+      refreshBalance()
+      loadStats()
+    } catch (err) {
+      const msg = getErrorMessage(err)
+      toast.error('Withdrawal Failed', msg)
+      throw err
     }
   }
 
   return (
     <DashLayout>
-      <div className="max-w-2xl mx-auto flex flex-col gap-6">
+      <div className="max-w-3xl mx-auto flex flex-col gap-6">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'var(--color-secondary-muted)' }}>
+          <div
+            className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
+            style={{ background: 'var(--color-secondary-muted)' }}
+          >
             <Users size={21} style={{ color: 'var(--color-secondary)' }} />
           </div>
           <div>
-            <h1 className="font-heading text-xl" style={{ fontWeight: 800, color: 'var(--color-text-primary)' }}>Referral Program</h1>
-            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Invite friends — both of you earn</p>
+            <h1 className="font-heading text-xl font-800" style={{ fontWeight: 800, color: 'var(--color-text-primary)' }}>
+              Referral Program & Earnings
+            </h1>
+            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+              Invite friends — your earnings are securely kept in a dedicated referral balance
+            </p>
           </div>
         </div>
 
-        {/* Hero card */}
+        {/* ── Separate Referral Wallet Balance Card ── */}
         <motion.div
-          initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
-          className="rounded-3xl p-7 text-center relative overflow-hidden"
-          style={{ background: 'linear-gradient(135deg, var(--color-secondary-dark), var(--color-secondary))', borderRadius: 'var(--radius-2xl)' }}>
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }} />
-            <div className="absolute -bottom-8 -left-8 w-32 h-32 rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }} />
-          </div>
-          <div className="relative">
-            <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
-              <Gift size={26} color="white" />
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-3xl p-6 md:p-8 text-white relative overflow-hidden"
+          style={{
+            background: 'linear-gradient(135deg, #047857 0%, #10B981 100%)',
+            borderRadius: 'var(--radius-2xl)',
+            boxShadow: '0 12px 30px rgba(16, 185, 129, 0.25)',
+          }}
+        >
+          <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Gift size={16} />
+                <p className="text-white/80 text-xs font-700 uppercase tracking-wider">
+                  Separate Referral Balance
+                </p>
+              </div>
+              <p className="font-heading text-4xl sm:text-5xl font-800 tracking-tight" style={{ fontWeight: 800 }}>
+                {formatNaira(referralBal)}
+              </p>
+              <p className="text-white/70 text-xs mt-1.5 max-w-sm leading-relaxed">
+                Referral bonuses are kept separate from your main wallet until you choose to transfer them.
+              </p>
             </div>
-            <p className="font-heading text-4xl text-white mb-1" style={{ fontWeight: 800 }}>
-              {formatNaira(totalEarned)}
-            </p>
-            <p className="text-white/70 text-sm">Total referral earnings</p>
-            <div className="flex justify-center gap-6 mt-5">
-              <div>
-                <p className="font-heading text-2xl text-white font-800" style={{ fontWeight: 800 }}>{MOCK_EARNINGS.length}</p>
-                <p className="text-white/60 text-xs">Referrals</p>
-              </div>
-              <div className="w-px" style={{ background: 'rgba(255,255,255,0.2)' }} />
-              <div>
-                <p className="font-heading text-2xl text-white font-800" style={{ fontWeight: 800 }}>₦150</p>
-                <p className="text-white/60 text-xs">Per referral</p>
-              </div>
-              <div className="w-px" style={{ background: 'rgba(255,255,255,0.2)' }} />
-              <div>
-                <p className="font-heading text-2xl text-white font-800" style={{ fontWeight: 800 }}>₦100</p>
-                <p className="text-white/60 text-xs">Friend gets</p>
-              </div>
+
+            <div className="shrink-0 flex sm:flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => { setWithdrawAmt(String(Math.max(500, referralBal))); setWithdrawOpen(true); }}
+                disabled={referralBal < 500}
+                className="btn bg-white text-emerald-800 hover:bg-white/90 text-sm font-700 px-5 py-3 rounded-2xl shadow-md transition-all justify-center"
+                style={{ opacity: referralBal < 500 ? 0.6 : 1 }}
+              >
+                <ArrowDownLeft size={16} /> Transfer to Main Wallet
+              </button>
+              {referralBal < 500 && (
+                <p className="text-white/60 text-xs text-center">Min. transfer: ₦500</p>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Metrics Bar */}
+          <div
+            className="grid grid-cols-3 gap-3 mt-6 pt-5"
+            style={{ borderTop: '1px solid rgba(255,255,255,0.2)' }}
+          >
+            <div>
+              <p className="text-white/70 text-xs">Total Earned</p>
+              <p className="font-heading text-lg font-800 mt-0.5">
+                {formatNaira(stats?.totalEarned ?? 0)}
+              </p>
+            </div>
+            <div>
+              <p className="text-white/70 text-xs">Referred Users</p>
+              <p className="font-heading text-lg font-800 mt-0.5">
+                {stats?.totalReferred ?? 0}
+              </p>
+            </div>
+            <div>
+              <p className="text-white/70 text-xs">Per Referral</p>
+              <p className="font-heading text-lg font-800 mt-0.5">
+                ₦150
+              </p>
             </div>
           </div>
         </motion.div>
 
-        {/* Referral code + link */}
-        <div className="card p-6 flex flex-col gap-4" style={{ borderRadius: 'var(--radius-xl)' }}>
-          <p className="font-heading text-sm font-700" style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Your Referral Code</p>
-
-          {/* Code */}
-          <div className="flex items-center gap-3 p-4 rounded-2xl" style={{ background: 'var(--color-surface-elevated)' }}>
-            <p className="font-mono text-xl font-800 flex-1" style={{ fontWeight: 800, color: 'var(--color-primary)', fontFamily: 'var(--font-mono)', letterSpacing: '0.08em' }}>
-              {referralCode}
+        {/* ── Share & Referral Link Section ── */}
+        <div className="card p-6 flex flex-col gap-5" style={{ borderRadius: 'var(--radius-xl)' }}>
+          <div>
+            <h2 className="font-heading text-base font-700" style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>
+              Your Unique Referral Details
+            </h2>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+              Give your friends this code or link. When they register and fund their wallet, you earn ₦150 instantly!
             </p>
-            <button onClick={() => handleCopy(referralCode)}
-              className="btn btn-primary btn-sm shrink-0">
-              {copied ? <><CheckCheck size={14} /> Copied!</> : <><Copy size={14} /> Copy</>}
-            </button>
           </div>
 
-          {/* Link */}
-          <div>
-            <p className="font-heading text-sm font-700 mb-2" style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Referral Link</p>
-            <div className="flex gap-2">
-              <div className="flex-1 p-3 rounded-xl text-xs truncate" style={{ background: 'var(--color-surface-elevated)', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
-                {referralLink}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Referral Code Box */}
+            <div
+              className="p-4 rounded-2xl flex items-center justify-between"
+              style={{ background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)' }}
+            >
+              <div>
+                <p className="text-xs mb-1" style={{ color: 'var(--color-text-muted)' }}>Referral Code</p>
+                <p className="font-mono text-lg font-800" style={{ color: 'var(--color-primary)', fontWeight: 800 }}>
+                  {referralCode}
+                </p>
               </div>
-              <button onClick={() => handleCopy(referralLink)} className="btn btn-outline btn-sm shrink-0">
-                <Copy size={14} />
+              <button
+                type="button"
+                onClick={handleCopyCode}
+                className="btn btn-outline btn-sm"
+              >
+                {copiedCode ? <CheckCheck size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                {copiedCode ? 'Copied' : 'Copy'}
               </button>
             </div>
-          </div>
 
-          {/* Share button */}
-          <button onClick={handleShare} className="btn btn-secondary w-full justify-center">
-            <Share2 size={17} /> Share on WhatsApp / Social
-          </button>
-        </div>
-
-        {/* How it works */}
-        <div className="card p-6" style={{ borderRadius: 'var(--radius-xl)' }}>
-          <div className="flex items-center gap-2 mb-5">
-            <Sparkles size={16} style={{ color: 'var(--color-accent-dark)' }} />
-            <h2 className="font-heading text-base font-700" style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>How it works</h2>
-          </div>
-          <div className="flex flex-col gap-4">
-            {HOW_IT_WORKS.map((step, i) => (
-              <div key={step.step} className="flex gap-4">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-heading font-800 text-sm"
-                     style={{ fontWeight: 800, background: i === 0 ? 'var(--color-secondary)' : 'var(--color-secondary-muted)', color: i === 0 ? 'white' : 'var(--color-secondary)' }}>
-                  {step.step}
-                </div>
-                <div>
-                  <p className="font-heading text-sm font-700 mb-0.5" style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{step.title}</p>
-                  <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>{step.desc}</p>
-                </div>
+            {/* Native Share Box */}
+            <div
+              className="p-4 rounded-2xl flex items-center justify-between"
+              style={{ background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)' }}
+            >
+              <div>
+                <p className="text-xs mb-1" style={{ color: 'var(--color-text-muted)' }}>Share Link</p>
+                <p className="text-xs font-mono truncate max-w-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                  {referralLink}
+                </p>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Earnings list */}
-        <div className="card overflow-hidden" style={{ borderRadius: 'var(--radius-xl)' }}>
-          <div className="flex items-center justify-between p-5">
-            <div className="flex items-center gap-2">
-              <TrendingUp size={16} style={{ color: 'var(--color-secondary)' }} />
-              <h2 className="font-heading text-base font-700" style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Referral Earnings</h2>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="btn btn-outline btn-sm"
+                  title="Copy Link"
+                >
+                  <Copy size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  className="btn btn-primary btn-sm"
+                >
+                  <Share2 size={14} /> Share
+                </button>
+              </div>
             </div>
           </div>
+        </div>
 
-          {MOCK_EARNINGS.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-12 px-6 text-center">
-              <Users size={36} style={{ color: 'var(--color-border-strong)' }} />
-              <p className="font-heading text-sm font-700" style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>No referrals yet</p>
-              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Share your link above to start earning</p>
+        {/* ── Referred Friends List ── */}
+        <div className="card p-6 flex flex-col gap-4" style={{ borderRadius: 'var(--radius-xl)' }}>
+          <h2 className="font-heading text-base font-700" style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            Referred Friends ({stats?.referredUsers?.length || 0})
+          </h2>
+
+          {(!stats?.referredUsers || stats.referredUsers.length === 0) ? (
+            <div className="py-8 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              No referred friends yet. Share your link above to start earning!
             </div>
           ) : (
-            <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-              {MOCK_EARNINGS.map((e, i) => (
-                <motion.div key={i}
-                  initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.06 }}
-                  className="flex items-center gap-4 px-5 py-4">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-700 shrink-0"
-                       style={{ background: 'var(--color-secondary)', fontWeight: 700 }}>
-                    {e.name[0]}
+            <div className="flex flex-col divide-y divide-border">
+              {stats.referredUsers.map(u => (
+                <div key={u.id} className="py-3 flex items-center justify-between text-xs">
+                  <div>
+                    <p className="font-heading font-700 text-sm" style={{ color: 'var(--color-text-primary)' }}>
+                      {u.name}
+                    </p>
+                    <p style={{ color: 'var(--color-text-muted)' }}>
+                      {u.phone} · Joined {new Date(u.joinedAt).toLocaleDateString()}
+                    </p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-heading text-sm font-700 truncate" style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{e.name}</p>
-                    <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{e.phone} · {e.date}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="font-heading text-base font-800" style={{ fontWeight: 800, color: 'var(--color-secondary)' }}>+{formatNaira(e.earned)}</p>
-                    <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{e.type}</p>
-                  </div>
-                </motion.div>
+                  <span
+                    className="px-2.5 py-1 rounded-full text-xs font-700"
+                    style={{
+                      background: u.hasFunded ? 'var(--color-success-subtle)' : 'var(--color-surface-elevated)',
+                      color: u.hasFunded ? 'var(--color-success)' : 'var(--color-text-muted)',
+                    }}
+                  >
+                    {u.hasFunded ? 'Wallet Funded ✓' : 'Registered'}
+                  </span>
+                </div>
               ))}
             </div>
           )}
         </div>
       </div>
+
+      {/* ── Withdrawal to Main Wallet Modal ── */}
+      {withdrawOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="card p-6 w-full max-w-sm flex flex-col gap-4"
+            style={{ borderRadius: 'var(--radius-2xl)' }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--color-success-subtle)' }}>
+                <Wallet size={18} style={{ color: 'var(--color-success)' }} />
+              </div>
+              <div>
+                <h3 className="font-heading text-base font-800" style={{ color: 'var(--color-text-primary)' }}>
+                  Transfer to Main Wallet
+                </h3>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  Available: {formatNaira(referralBal)}
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-600 mb-1.5 block" style={{ color: 'var(--color-text-secondary)' }}>
+                Amount to Transfer (₦)
+              </label>
+              <input
+                type="number"
+                value={withdrawAmt}
+                onChange={e => setWithdrawAmt(e.target.value)}
+                min={500}
+                max={referralBal}
+                step={100}
+                className="input font-heading font-700 text-lg"
+              />
+              <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                Min transfer: ₦500. Funds will be instantly available for spending.
+              </p>
+            </div>
+
+            {withdrawErr && (
+              <p className="text-xs" style={{ color: 'var(--color-error)' }}>{withdrawErr}</p>
+            )}
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setWithdrawOpen(false)}
+                className="btn btn-outline flex-1 justify-center"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleStartWithdraw}
+                className="btn btn-primary flex-1 justify-center"
+              >
+                Continue
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* PIN Confirmation */}
+      <PinModal
+        isOpen={pinOpen}
+        onClose={() => setPinOpen(false)}
+        onConfirm={handleConfirmPin}
+        title="Confirm Transfer"
+        description={`Transfer ${formatNaira(parseFloat(withdrawAmt) || 0)} from Referral to Main Wallet`}
+      />
     </DashLayout>
   )
 }

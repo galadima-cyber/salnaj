@@ -14,6 +14,8 @@ import {
 } from '../utils'
 import * as R    from '../utils/response'
 import { AuthRequest, JwtPayload } from '../types'
+import { ensureUserApiKey } from './apiKey.controller'
+import { createNotification } from './notification.controller'
 
 // ─── Token helpers ────────────────────────────────────────────
 
@@ -80,6 +82,9 @@ export async function register(req: Request, res: Response): Promise<void> {
     await tx.wallet.create({ data: { userId: created.id } })
     return created
   })
+
+  // Automatically generate developer API key upon registration
+  ensureUserApiKey(user.id).catch(() => {})
 
   // Send email OTP (don't block registration if SMTP times out)
   const otp = generateOtp()
@@ -284,15 +289,136 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
 }
 
 // ─── POST /api/auth/set-pin ───────────────────────────────────
-
+// Transaction PIN can only be set ONCE
 export async function setPin(req: any, res: Response): Promise<void> {
   const { pin } = req.body
   const userId  = req.user!.userId
 
+  if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+    R.badRequest(res, 'PIN must be exactly 4 digits')
+    return
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, pinHash: true },
+  })
+
+  if (!user) {
+    R.notFound(res, 'User not found')
+    return
+  }
+
+  if (user.pinHash) {
+    R.badRequest(res, 'PIN has already been set. Use Change PIN with your current PIN or Reset PIN.')
+    return
+  }
+
   const pinHash = await bcrypt.hash(pin, 10)
   await prisma.user.update({ where: { id: userId }, data: { pinHash } })
 
+  createNotification({
+    userId,
+    title: 'Transaction PIN Created',
+    message: 'Your 4-digit transaction PIN was set successfully. Keep it safe.',
+    type: 'SECURITY',
+    actionUrl: '/settings',
+  })
+
   R.ok(res, 'Transaction PIN set successfully')
+}
+
+// ─── POST /api/auth/change-pin ────────────────────────────────
+export async function changePin(req: any, res: Response): Promise<void> {
+  const { currentPin, newPin } = req.body
+  const userId = req.user!.userId
+
+  if (!currentPin || !newPin) {
+    R.badRequest(res, 'Both current PIN and new PIN are required')
+    return
+  }
+
+  if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
+    R.badRequest(res, 'New PIN must be exactly 4 digits')
+    return
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, pinHash: true },
+  })
+
+  if (!user || !user.pinHash) {
+    R.badRequest(res, 'You have not set a transaction PIN yet. Please set your PIN first.')
+    return
+  }
+
+  const matches = await bcrypt.compare(currentPin, user.pinHash)
+  if (!matches) {
+    R.badRequest(res, 'Current PIN is incorrect')
+    return
+  }
+
+  const pinHash = await bcrypt.hash(newPin, 10)
+  await prisma.user.update({ where: { id: userId }, data: { pinHash } })
+
+  createNotification({
+    userId,
+    title: 'Transaction PIN Updated',
+    message: 'Your 4-digit transaction PIN was changed successfully.',
+    type: 'SECURITY',
+    actionUrl: '/settings',
+  })
+
+  R.ok(res, 'Transaction PIN changed successfully')
+}
+
+// ─── POST /api/auth/change-password ───────────────────────────
+export async function changePassword(req: any, res: Response): Promise<void> {
+  const { currentPassword, newPassword } = req.body
+  const userId = req.user!.userId
+
+  if (!currentPassword || !newPassword) {
+    R.badRequest(res, 'Current password and new password are required')
+    return
+  }
+
+  if (newPassword.length < 8) {
+    R.badRequest(res, 'New password must be at least 8 characters long')
+    return
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, passwordHash: true },
+  })
+
+  if (!user) {
+    R.notFound(res, 'User not found')
+    return
+  }
+
+  const matches = await bcrypt.compare(currentPassword, user.passwordHash)
+  if (!matches) {
+    R.badRequest(res, 'Current password is incorrect')
+    return
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 12)
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash } })
+
+  // Revoke current refresh session
+  await redisClient.del(`refresh:${userId}`)
+
+  createNotification({
+    userId,
+    title: 'Password Changed',
+    message: 'Your account password has been updated successfully.',
+    type: 'SECURITY',
+    actionUrl: '/settings',
+  })
+
+  R.ok(res, 'Password updated successfully')
 }
 
 // ─── POST /api/auth/send-otp ─────────────────────────────────
@@ -341,11 +467,26 @@ export async function getMe(req: any, res: Response): Promise<void> {
       id: true, fullName: true, email: true, phone: true,
       role: true, kycStatus: true, referralCode: true,
       isEmailVerified: true, isPhoneVerified: true,
+      pinHash: true,
       profilePhoto: true, createdAt: true,
-      wallet: { select: { mainBalance: true, bonusBalance: true } },
+      wallet: {
+        select: {
+          mainBalance: true,
+          bonusBalance: true,
+          referralBalance: true,
+          cashbackBalance: true,
+        },
+      },
     },
   })
 
   if (!user) { R.notFound(res, 'User not found'); return }
-  R.ok(res, 'User profile', user)
+
+  const hasPin = Boolean(user.pinHash)
+  const { pinHash, ...safeUser } = user
+
+  R.ok(res, 'User profile', {
+    ...safeUser,
+    hasPin,
+  })
 }

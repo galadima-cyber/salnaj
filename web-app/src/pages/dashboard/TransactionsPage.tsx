@@ -9,10 +9,10 @@ import { txApi, Transaction } from '@/services/endpoints'
 import { getErrorMessage } from '@/services/api'
 import { formatNaira } from '@/utils'
 
-const TX_TYPES = ['ALL', 'DATA', 'AIRTIME', 'ELECTRICITY', 'CABLE_TV', 'EDUCATION', 'BETTING', 'WALLET_FUND']
+const TX_TYPES = ['ALL', 'DATA', 'AIRTIME', 'ELECTRICITY', 'CABLE_TV', 'EDUCATION', 'WALLET_FUND']
 const TX_TYPE_LABELS: Record<string, string> = {
   DATA: 'Data', AIRTIME: 'Airtime', ELECTRICITY: 'Electricity',
-  CABLE_TV: 'Cable TV', EDUCATION: 'Education', BETTING: 'Betting',
+  CABLE_TV: 'Cable TV', EDUCATION: 'Education',
   WALLET_FUND: 'Wallet Fund', REFERRAL_BONUS: 'Referral',
   BULK_SMS: 'Bulk SMS', RECHARGE_CARD: 'Recharge Cards',
 }

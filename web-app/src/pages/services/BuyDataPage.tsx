@@ -9,6 +9,7 @@ import { getErrorMessage } from '@/services/api'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { formatNaira }   from '@/utils'
+import { NetworkBadge } from '@/components/ui/ProviderIcons'
 
 const NETWORKS = [
   { id: 'MTN',      label: 'MTN',     color: '#FFCC00', bg: 'rgba(255,204,0,0.12)',  textColor: '#996600' },
@@ -89,15 +90,21 @@ export default function BuyDataPage() {
 
   const handleConfirmPin = async (pin: string) => {
     if (!selectedPlan) return
-    const res = await dataApi.purchase({ planId: selectedPlan.id, phone, pin })
-    setPinOpen(false)
-    const ok = res.data.data?.status === 'SUCCESS'
-    setReceipt({ open: true, status: ok ? 'success' : 'failed', ref: res.data.data?.reference || '' })
-    if (ok) {
-      refreshBalance(); setSelected(null)
-      toast.success('Data Delivered!', `${selectedPlan?.sizeLabel} sent to ${phone}`)
-    } else {
-      toast.error('Transaction Failed', 'Your wallet has been refunded automatically')
+    try {
+      const res = await dataApi.purchase({ planId: selectedPlan.id, phone, pin })
+      setPinOpen(false)
+      const ok = res.data.data?.status === 'SUCCESS'
+      setReceipt({ open: true, status: ok ? 'success' : 'failed', ref: res.data.data?.reference || '' })
+      if (ok) {
+        refreshBalance(); setSelected(null)
+        toast.success('Data Delivered Successfully!', `${selectedPlan?.sizeLabel} has been delivered to ${phone}`)
+      } else {
+        toast.error('Transaction Could Not Complete', 'The telecom network could not process this request. Your wallet was not debited.')
+      }
+    } catch (err) {
+      const msg = getErrorMessage(err)
+      toast.error('Data Purchase Failed', msg)
+      throw err
     }
   }
 
@@ -142,11 +149,8 @@ export default function BuyDataPage() {
                       borderColor:  network === n.id ? n.color : 'var(--color-border)',
                       cursor:       'pointer',
                     }}>
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center font-heading font-800 text-sm"
-                         style={{ background: n.bg, color: n.textColor, fontWeight: 800 }}>
-                      {n.label[0]}
-                    </div>
-                    <span className="text-xs font-600" style={{ color: network === n.id ? n.textColor : 'var(--color-text-secondary)', fontWeight: 600 }}>{n.label}</span>
+                    <NetworkBadge network={n.id} size={40} />
+                    <span className="text-xs font-700" style={{ color: network === n.id ? n.textColor : 'var(--color-text-secondary)', fontWeight: 700 }}>{n.label}</span>
                   </button>
                 ))}
               </div>

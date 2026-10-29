@@ -21,17 +21,16 @@ const QUICK_ACTIONS = [
   { icon: Tv,            label: 'Cable TV',        href: '/cable-tv',      color: '#DB2777',                  bg: 'rgba(219,39,119,0.10)'        },
   { icon: GraduationCap, label: 'Education',       href: '/education',     color: 'var(--color-accent-dark)', bg: 'var(--color-accent-subtle)'   },
   { icon: RefreshCw,     label: 'Airtime→Cash',    href: '/airtime-cash',  color: 'var(--color-secondary)',  bg: 'var(--color-secondary-muted)' },
-  { icon: Target,        label: 'Betting',         href: '/betting',       color: '#DC2626',                  bg: 'rgba(220,38,38,0.10)'         },
   { icon: MessageSquare, label: 'Bulk SMS',        href: '/bulk-sms',      color: 'var(--color-primary)',    bg: 'var(--color-primary-muted)'   },
   { icon: CreditCard,    label: 'Recharge Cards',  href: '/recharge-cards',color: '#7C3AED',                 bg: 'rgba(124,58,237,0.10)'        },
   { icon: Users,         label: 'Referrals',       href: '/referrals',     color: 'var(--color-accent-dark)',bg: 'var(--color-accent-subtle)'   },
-  { icon: Code2,         label: 'API Access',      href: '/api-access',    color: '#0891B2',                  bg: 'rgba(8,145,178,0.10)'         },
+  { icon: Code2,         label: 'API Access',      href: '/settings?tab=api', color: '#0891B2',              bg: 'rgba(8,145,178,0.10)'         },
   { icon: Wallet,        label: 'Fund Wallet',     href: '/wallet',        color: 'var(--color-secondary)',  bg: 'var(--color-secondary-muted)' },
 ]
 
 const TX_TYPE_LABELS: Record<string, string> = {
   DATA: 'Data', AIRTIME: 'Airtime', ELECTRICITY: 'Electricity',
-  CABLE_TV: 'Cable TV', EDUCATION: 'Education', BETTING: 'Betting',
+  CABLE_TV: 'Cable TV', EDUCATION: 'Education', AIRTIME_TO_CASH: 'Airtime to Cash',
   WALLET_FUND: 'Wallet Funded', REFERRAL_BONUS: 'Referral Bonus',
   BULK_SMS: 'Bulk SMS', RECHARGE_CARD: 'Recharge Cards',
 }
@@ -157,12 +156,20 @@ export default function DashboardPage() {
                   : '₦ ••••••'
                 }
               </p>
-              {balance && balance.bonus > 0 && (
-                <span className="badge text-xs"
-                      style={{ background: 'rgba(255,255,255,0.15)', color: 'white' }}>
-                  🎁 Bonus: {balanceVisible ? formatNaira(balance.bonus) : '₦ ••••'}
-                </span>
-              )}
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                {balance && balance.referral > 0 && (
+                  <Link to="/referrals" className="badge text-xs inline-flex items-center gap-1 hover:bg-white/25 transition-all"
+                        style={{ background: 'rgba(255,255,255,0.22)', color: 'white', textDecoration: 'none' }}>
+                    👥 Referral: {balanceVisible ? formatNaira(balance.referral) : '₦ ••••'} <ChevronRight size={10} />
+                  </Link>
+                )}
+                {balance && balance.bonus > 0 && (
+                  <span className="badge text-xs"
+                        style={{ background: 'rgba(255,255,255,0.15)', color: 'white' }}>
+                    🎁 Bonus: {balanceVisible ? formatNaira(balance.bonus) : '₦ ••••'}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex flex-wrap gap-3">
               <Link to="/wallet" className="btn btn-sm"
@@ -182,23 +189,22 @@ export default function DashboardPage() {
         <div>
           <p className="font-heading text-base font-700 mb-4"
              style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Quick Actions</p>
-          <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-12 gap-3">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
             {QUICK_ACTIONS.map((a, i) => (
               <motion.div
                 key={a.label}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.03 }}
-                className="col-span-1 md:col-span-2">
+                transition={{ delay: i * 0.03 }}>
                 <Link
                   to={a.href}
-                  className="flex flex-col items-center gap-2 p-3 rounded-2xl card group transition-all"
+                  className="flex flex-col items-center gap-2 p-3 sm:p-3.5 rounded-2xl card group transition-all text-center h-full"
                   style={{ textDecoration: 'none', borderRadius: 'var(--radius-lg)' }}>
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110"
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 shrink-0"
                        style={{ background: a.bg }}>
-                    <a.icon size={19} style={{ color: a.color }} />
+                    <a.icon size={21} style={{ color: a.color }} />
                   </div>
-                  <span className="text-xs text-center leading-tight"
+                  <span className="text-xs text-center leading-tight mt-0.5"
                         style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-heading)', fontWeight: 600 }}>
                     {a.label}
                   </span>

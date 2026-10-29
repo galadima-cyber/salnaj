@@ -104,6 +104,7 @@ model User {
   apiKeys          ApiKey[]
   bulkSmsJobs      BulkSmJob[]
   auditLogs        AuditLog[]
+  airtimeCashRequests AirtimeToCashRequest[]
 
   @@index([email])
   @@index([phone])
@@ -118,6 +119,7 @@ model Wallet {
   userId           String   @unique
   mainBalance      Decimal  @default(0) @db.Decimal(15, 2)
   bonusBalance     Decimal  @default(0) @db.Decimal(15, 2)
+  referralBalance  Decimal  @default(0) @db.Decimal(15, 2)
   cashbackBalance  Decimal  @default(0) @db.Decimal(15, 2)
   totalFunded      Decimal  @default(0) @db.Decimal(15, 2)
   totalSpent       Decimal  @default(0) @db.Decimal(15, 2)
@@ -414,4 +416,28 @@ model PromoBanner {
   createdAt        DateTime @default(now())
 
   @@index([isActive])
+}
+
+// ─── Airtime To Cash Request ─────────────────────────────────
+
+model AirtimeToCashRequest {
+  id               String    @id @default(cuid())
+  userId           String
+  network          Network
+  phoneNumber      String
+  airtimeAmount    Decimal   @db.Decimal(15, 2)
+  cashAmount       Decimal   @db.Decimal(15, 2)
+  ratePercent      Decimal   @db.Decimal(5, 2)
+  merchantPhone    String
+  reference        String    @unique
+  status           TxStatus  @default(PENDING)
+  adminNote        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([reference])
 }

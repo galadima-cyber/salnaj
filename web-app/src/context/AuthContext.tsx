@@ -18,12 +18,14 @@ export interface AuthUser {
   referralCode:    string
   isEmailVerified: boolean
   isPhoneVerified: boolean
+  hasPin?:         boolean
   profilePhoto?:   string
 }
 
 export interface WalletBalance {
   main:     number
   bonus:    number
+  referral: number
   cashback: number
   total:    number
 }
@@ -37,6 +39,7 @@ interface AuthContextValue {
   logout:          () => Promise<void>
   register:        (data: RegisterData) => Promise<{ userId: string }>
   refreshBalance:  () => Promise<void>
+  refreshUser:     () => Promise<void>
   updateUser:      (u: Partial<AuthUser>) => void
 }
 
@@ -131,6 +134,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch { /* silent */ }
   }, [])
 
+  // ── Refresh user profile (e.g. after setting/changing PIN) ──
+  const refreshUser = useCallback(async () => {
+    try {
+      const { data } = await api.get<{ success: boolean; data: AuthUser }>('/auth/me')
+      if (data.data) setUser(data.data)
+    } catch { /* silent */ }
+  }, [])
+
   // ── Update user (after profile save) ──────────────────────
   const updateUser = useCallback((partial: Partial<AuthUser>) => {
     setUser(prev => prev ? { ...prev, ...partial } : prev)
@@ -146,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout,
       register,
       refreshBalance,
+      refreshUser,
       updateUser,
     }}>
       {children}

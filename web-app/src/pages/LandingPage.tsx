@@ -87,7 +87,6 @@ const coreServices = [
 
 const extraServices = [
   { icon: RefreshCw, label: 'Airtime to Cash', color: 'var(--color-secondary)' },
-  { icon: Target,    label: 'Betting Wallet',  color: '#DC2626' },
   { icon: MessageSquare, label: 'Bulk SMS',   color: 'var(--color-primary)' },
   { icon: CreditCard, label: 'Recharge Cards', color: '#7C3AED' },
   { icon: Users,     label: 'Referral System', color: 'var(--color-accent-dark)' },
