@@ -30,41 +30,65 @@ export default function WalletCallbackPage() {
 
     try {
       const res = await walletApi.verifyFunding(reference)
-      if (res.data.success && res.data.data?.status === 'success') {
+      const data = res.data?.data
+      const serverStatus = data?.status
+
+      if (res.data.success && serverStatus === 'success') {
+        // Definitive success
         setStatus('success')
         setMessage(res.data.message || 'Payment verified! Your wallet has been credited.')
         await refreshBalance()
-      } else {
-        // Payment processed but status unclear — treat as success if message says so
-        if (res.data.success) {
-          setStatus('success')
-          setMessage(res.data.message || 'Wallet credited successfully.')
-          await refreshBalance()
-        } else {
-          throw new Error(res.data.message || 'Verification returned an unknown status.')
-        }
+        return
       }
+
+      if (serverStatus === 'pending' || serverStatus === 'processing') {
+        // Server said it's still processing — retry if not exhausted
+        const currentAttempt = attemptRef.current + 1
+        attemptRef.current = currentAttempt
+        if (currentAttempt < maxAttempts && !isManual) {
+          setAttempt(currentAttempt)
+          setMessage(`Payment is processing... (check ${currentAttempt + 1} of ${maxAttempts})`)
+          setTimeout(() => verify(), retryDelay)
+        } else {
+          setStatus('pending')
+          setMessage(
+            'Your payment is still being processed. If your bank was debited, your wallet will be credited automatically within a few minutes.'
+          )
+        }
+        return
+      }
+
+      // Fallback: success=true but no data — treat as success
+      if (res.data.success) {
+        setStatus('success')
+        setMessage(res.data.message || 'Wallet credited successfully.')
+        await refreshBalance()
+        return
+      }
+
+      throw new Error(res.data.message || 'Verification returned an unknown status.')
     } catch (err: any) {
       const currentAttempt = attemptRef.current + 1
       attemptRef.current = currentAttempt
 
-      const serverMsg: string = err.response?.data?.message || ''
+      const serverMsg: string = err?.response?.data?.message || err?.message || ''
 
-      // If Paystack itself says payment failed (not a connectivity issue), stop retrying
-      if (serverMsg.toLowerCase().includes('failed') || serverMsg.toLowerCase().includes('abandoned')) {
+      // Definitive failure from Paystack
+      if (serverMsg.toLowerCase().includes('not completed') ||
+          serverMsg.toLowerCase().includes('abandoned') ||
+          serverMsg.toLowerCase().includes('failed')) {
         setStatus('failed')
-        setMessage('This payment was not completed. No amount was deducted from your account.')
+        setMessage('This payment was not completed. No amount was deducted from your bank account.')
         if (isManual) setRetrying(false)
         return
       }
 
-      // If we haven't exhausted retries and it's not a manual retry, try again
+      // Retry on transient errors
       if (currentAttempt < maxAttempts && !isManual) {
         setAttempt(currentAttempt)
         setMessage(`Verifying payment... (attempt ${currentAttempt + 1} of ${maxAttempts})`)
         setTimeout(() => verify(), retryDelay)
       } else {
-        // Exhausted retries or manual — show pending state
         setStatus('pending')
         setMessage(
           'Your payment is being processed. If your bank account was debited, your wallet will be credited automatically within a few minutes. You can safely close this page.'
@@ -76,7 +100,9 @@ export default function WalletCallbackPage() {
   }
 
   useEffect(() => {
-    verify()
+    // Small delay before first verify to allow Paystack to fully process the payment
+    const timer = setTimeout(() => verify(), 1500)
+    return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reference])
 

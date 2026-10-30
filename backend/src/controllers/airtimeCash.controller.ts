@@ -146,6 +146,7 @@ export async function submitConversion(req: any, res: Response): Promise<void> {
   })
 
   R.created(res, 'Airtime to Cash request submitted. Transfer the airtime using the USSD code provided.', {
+    id: result.id,
     reference,
     network: netKey,
     airtimeAmount: amount,

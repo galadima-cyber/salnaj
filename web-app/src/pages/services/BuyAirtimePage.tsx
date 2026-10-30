@@ -83,7 +83,7 @@ export default function BuyAirtimePage() {
         {/* Network */}
         <div className="card p-5" style={{ borderRadius: 'var(--radius-xl)' }}>
           <p className="font-heading text-sm font-700 mb-3" style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Select Network</p>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {NETWORKS.map(n => (
               <button key={n.id} onClick={() => setNetwork(n.id)}
                 className="flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all"

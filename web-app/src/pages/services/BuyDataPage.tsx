@@ -8,7 +8,7 @@ import { dataApi, DataPlan, SmartBuyResult } from '@/services/endpoints'
 import { getErrorMessage } from '@/services/api'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { formatNaira }   from '@/utils'
+import { formatNaira, detectNetwork }   from '@/utils'
 import { NetworkBadge } from '@/components/ui/ProviderIcons'
 
 const NETWORKS = [
@@ -32,6 +32,7 @@ export default function BuyDataPage() {
   const [error,        setError]       = useState('')
   const [search,       setSearch]      = useState('')
   const [phone,        setPhone]       = useState('')
+  const [detectedNet,  setDetectedNet]  = useState<string | null>(null)
   const [selectedPlan, setSelected]    = useState<DataPlan | null>(null)
   const [pinOpen,      setPinOpen]     = useState(false)
   const [receipt,      setReceipt]     = useState<{ open: boolean; status: 'success'|'failed'; ref: string; token?: string } | null>(null)
@@ -79,6 +80,21 @@ export default function BuyDataPage() {
     setSelected(plan)
     // Pre-fill network
     setNetwork(plan.network)
+  }
+
+  const handlePhoneChange = (val: string) => {
+    setPhone(val)
+    if (val.length >= 4) {
+      const detected = detectNetwork(val)
+      if (detected) {
+        setDetectedNet(detected)
+        setNetwork(detected)
+      } else {
+        setDetectedNet(null)
+      }
+    } else {
+      setDetectedNet(null)
+    }
   }
 
   const handleBuy = () => {
@@ -140,7 +156,7 @@ export default function BuyDataPage() {
             {/* Network selector */}
             <div className="card p-5" style={{ borderRadius: 'var(--radius-xl)' }}>
               <p className="font-heading text-sm font-700 mb-3" style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Select Network</p>
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {NETWORKS.map(n => (
                   <button key={n.id} onClick={() => setNetwork(n.id)}
                     className="flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all"
@@ -160,10 +176,15 @@ export default function BuyDataPage() {
             <div className="card p-5" style={{ borderRadius: 'var(--radius-xl)' }}>
               <p className="font-heading text-sm font-700 mb-3" style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Phone Number</p>
               <input
-                type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+                type="tel" value={phone} onChange={e => handlePhoneChange(e.target.value)}
                 className="input" placeholder="e.g. 0801 234 5678"
                 maxLength={11}
               />
+              {phone.length >= 4 && detectedNet && (
+                <p className="text-xs mt-2" style={{ color: 'var(--color-secondary)' }}>
+                  ✓ Detected: {detectedNet} — network switched automatically
+                </p>
+              )}
             </div>
 
             {/* Category filter + Search */}

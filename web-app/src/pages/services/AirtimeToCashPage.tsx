@@ -36,7 +36,9 @@ export default function AirtimeToCashPage() {
   const [pinOpen,     setPinOpen]     = useState(false)
   const [history,     setHistory]     = useState<AirtimeCashItem[]>([])
   const [copiedCode,  setCopiedCode]  = useState(false)
+  const [verifyingId, setVerifyingId] = useState<string | null>(null)
   const [successInfo, setSuccessInfo] = useState<{
+    id?: string
     reference: string
     ussdCode: string
     instructions: string
@@ -109,6 +111,7 @@ export default function AirtimeToCashPage() {
       setPinOpen(false)
       const data = res.data.data
       setSuccessInfo({
+        id: data.id,
         reference: data.reference,
         ussdCode: data.ussdCode,
         instructions: data.instructions,
@@ -123,6 +126,27 @@ export default function AirtimeToCashPage() {
       throw err
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleConfirmTransfer = async (id: string) => {
+    if (!id) return
+    setVerifyingId(id)
+    try {
+      const res = await airtimeCashApi.confirmTransfer(id)
+      toast.success('Transfer Verified!', res.data.message || 'Funds credited to your wallet!')
+      refreshBalance()
+      // Reload history
+      const histRes = await airtimeCashApi.getHistory()
+      if (histRes.data.data?.items) {
+        setHistory(histRes.data.data.items)
+      }
+      setSuccessInfo(null)
+      setActiveTab('history')
+    } catch (err) {
+      toast.error('Verification Pending', getErrorMessage(err))
+    } finally {
+      setVerifyingId(null)
     }
   }
 
@@ -244,6 +268,17 @@ export default function AirtimeToCashPage() {
                 </div>
               </div>
 
+              {successInfo.id && (
+                <button
+                  type="button"
+                  onClick={() => handleConfirmTransfer(successInfo.id!)}
+                  disabled={verifyingId === successInfo.id}
+                  className="btn btn-primary w-full justify-center py-3.5 text-sm font-700"
+                >
+                  {verifyingId === successInfo.id ? 'Verifying Transfer...' : '✓ I Have Transferred the Airtime (Verify & Credit Now)'}
+                </button>
+              )}
+
               <div className="flex gap-3">
                 <button
                   onClick={() => setSuccessInfo(null)}
@@ -253,9 +288,9 @@ export default function AirtimeToCashPage() {
                 </button>
                 <button
                   onClick={() => setActiveTab('history')}
-                  className="btn btn-primary flex-1 justify-center"
+                  className="btn btn-outline flex-1 justify-center"
                 >
-                  View Status
+                  View History
                 </button>
               </div>
             </motion.div>
@@ -487,7 +522,7 @@ export default function AirtimeToCashPage() {
                       </div>
                     </div>
 
-                    <div className="text-right">
+                    <div className="text-right flex flex-col items-end gap-1.5">
                       <p className="font-heading text-sm font-800" style={{ color: 'var(--color-success)' }}>
                         +{formatNaira(Number(item.cashAmount))}
                       </p>
@@ -509,6 +544,16 @@ export default function AirtimeToCashPage() {
                       >
                         {item.status}
                       </span>
+                      {isPending && (
+                        <button
+                          type="button"
+                          onClick={() => handleConfirmTransfer(item.id)}
+                          disabled={verifyingId === item.id}
+                          className="btn btn-outline btn-sm py-1 px-2.5 text-[11px] font-700 mt-1"
+                        >
+                          {verifyingId === item.id ? 'Checking...' : 'Verify Now'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 )

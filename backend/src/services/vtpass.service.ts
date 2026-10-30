@@ -4,15 +4,12 @@ import { logger } from '../config/logger'
 import { generateRef, sleep } from '../utils'
 import { VTPassResponse, VTPassStatus } from '../types'
 import { redisClient, CacheKeys } from '../config/redis'
+import { AppError } from '../middlewares/error.middleware'
 
 class VTPassService {
   private readonly client: AxiosInstance
 
   constructor() {
-    const credentials = Buffer.from(
-      `${env.VTPASS_API_KEY}:${env.VTPASS_SECRET_KEY}`
-    ).toString('base64')
-
     this.client = axios.create({
       baseURL: env.VTPASS_BASE_URL,
       timeout: 30_000,
@@ -33,6 +30,74 @@ class VTPassService {
     return 'failed'
   }
 
+  /**
+   * Translate VTPass / Axios errors into user-friendly operational AppErrors.
+   * This ensures the global error handler shows a readable message (4xx/5xx)
+   * rather than swallowing the error as a generic 500 "Something went wrong".
+   */
+  private toAppError(err: unknown, context: string): AppError {
+    if (axios.isAxiosError(err)) {
+      const status  = err.response?.status
+      const apiCode = err.response?.data?.code
+      const apiMsg  = err.response?.data?.message
+                   || err.response?.data?.response_description
+                   || ''
+
+      logger.warn(`VTPass ${context} error`, { status, apiCode, apiMsg })
+
+      // Credential / auth issues (087 = INVALID CREDENTIALS)
+      if (status === 401 || status === 403 || apiCode === '087') {
+        return new AppError(
+          'Our payment gateway is temporarily unavailable. Please try again in a few minutes.',
+          503
+        )
+      }
+      // Invalid service or plan not found
+      if (status === 404 || apiCode === '012' || apiCode === '014') {
+        return new AppError(
+          'The selected service or plan is currently unavailable. Please choose a different option.',
+          400
+        )
+      }
+      // Duplicate transaction
+      if (apiCode === '002') {
+        return new AppError(
+          'A duplicate transaction was detected. If money was deducted, it will be refunded within 24 hours.',
+          400
+        )
+      }
+      // Provider out of capacity / insufficient VTPass balance
+      if (apiCode === '091') {
+        return new AppError(
+          'Service provider is temporarily unavailable. Please try again in a few minutes.',
+          503
+        )
+      }
+      // Network timeout or no response
+      if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT' || !err.response) {
+        return new AppError(
+          'The network service is not responding. Please check your internet and try again.',
+          503
+        )
+      }
+      // Generic provider message
+      if (apiMsg) {
+        return new AppError(
+          `Transaction could not be completed: ${apiMsg}. Your wallet was not debited.`,
+          400
+        )
+      }
+    }
+
+    // Non-Axios error — wrap as operational so we don't expose stack traces
+    const msg = (err as Error).message || 'Unknown error'
+    logger.error(`VTPass ${context} unexpected error`, { msg })
+    return new AppError(
+      'The transaction service encountered an unexpected error. Please try again.',
+      503
+    )
+  }
+
   private async post<T = VTPassResponse>(
     endpoint: string,
     payload: Record<string, unknown>,
@@ -41,17 +106,35 @@ class VTPassService {
     for (let attempt = 1; attempt <= retries + 1; attempt++) {
       try {
         const res = await this.client.post(endpoint, payload)
+        const data = res.data as VTPassResponse
+
+        // VTPass returns HTTP 200 even for errors — check the response code
+        if (data?.code && !['000', '099', 'delivered'].includes(data.code)) {
+          logger.warn('VTPass returned non-success code', {
+            endpoint, code: data.code, msg: data.response_description,
+          })
+          // Definitive failures — don't retry
+          if (['012', '014', '002', '091', '087'].includes(data.code)) {
+            throw this.toAppError(
+              { response: { status: 400, data } } as any,
+              endpoint
+            )
+          }
+        }
         return res.data as T
       } catch (err: unknown) {
+        // Already an AppError — rethrow immediately without retry
+        if ((err as AppError)?.isOperational) throw err
+
         const isLast = attempt === retries + 1
-        logger.warn('VTPass request failed', {
-          endpoint, attempt, err: (err as Error).message
+        logger.warn('VTPass request attempt failed', {
+          endpoint, attempt, err: (err as Error).message,
         })
-        if (isLast) throw err
+        if (isLast) throw this.toAppError(err, endpoint)
         await sleep(1000 * attempt) // exponential backoff
       }
     }
-    throw new Error('VTPass: max retries exceeded')
+    throw new AppError('VTPass: max retries exceeded', 503)
   }
 
   // ─── Data Plans ──────────────────────────────────────────────
@@ -70,10 +153,15 @@ class VTPassService {
     const serviceId = networkMap[network.toUpperCase()]
     if (!serviceId) throw new Error(`Unknown network: ${network}`)
 
-    const res = await this.client.get(`/service-variations?serviceID=${serviceId}`)
-    const plans = res.data?.content?.variations || []
-    await redisClient.setJSON(CacheKeys.dataPlans(network), plans, 6 * 3600)
-    return plans
+    try {
+      const res = await this.client.get(`/service-variations?serviceID=${serviceId}`)
+      const plans = res.data?.content?.variations || []
+      await redisClient.setJSON(CacheKeys.dataPlans(network), plans, 6 * 3600)
+      return plans
+    } catch (err) {
+      logger.warn('VTPass getDataPlans failed — returning empty', { network, err: (err as Error).message })
+      return []
+    }
   }
 
   // ─── Airtime ─────────────────────────────────────────────────
@@ -85,7 +173,7 @@ class VTPassService {
     amount: number
   }): Promise<{ status: VTPassStatus; providerRef?: string; data: VTPassResponse }> {
     const networkMap: Record<string, string> = {
-      MTN: 'mtn', AIRTEL: 'airtel', GLO: 'glo', ETISALAT: 'etisalat'
+      MTN: 'mtn', AIRTEL: 'airtel', GLO: 'glo', ETISALAT: 'etisalat',
     }
     const serviceID = networkMap[params.network.toUpperCase()]
 
@@ -118,7 +206,7 @@ class VTPassService {
     amount: number
   }): Promise<{ status: VTPassStatus; providerRef?: string; data: VTPassResponse }> {
     const networkMap: Record<string, string> = {
-      MTN: 'mtn-data', AIRTEL: 'airtel-data', GLO: 'glo-data', ETISALAT: 'etisalat-data'
+      MTN: 'mtn-data', AIRTEL: 'airtel-data', GLO: 'glo-data', ETISALAT: 'etisalat-data',
     }
     const serviceID = networkMap[params.network.toUpperCase()]
 
@@ -159,7 +247,7 @@ class VTPassService {
 
     const content = res.data?.content
     if (!content?.Customer_Name) {
-      throw new Error('Meter number not found or invalid')
+      throw new AppError('Meter number not found or invalid. Please verify and try again.', 400)
     }
 
     return {
@@ -179,7 +267,7 @@ class VTPassService {
     phone: string
   }): Promise<{ status: VTPassStatus; token?: string; providerRef?: string; data: VTPassResponse }> {
     logger.info('VTPass electricity purchase initiated', {
-      disco: params.disco, amount: params.amount
+      disco: params.disco, amount: params.amount,
     })
 
     const data = await this.post<VTPassResponse>('/pay', {
@@ -215,7 +303,7 @@ class VTPassService {
 
     const content = res.data?.content
     if (!content?.Customer_Name) {
-      throw new Error('Decoder number not found or invalid')
+      throw new AppError('Decoder number not found or invalid. Please verify and try again.', 400)
     }
 
     return {
@@ -235,7 +323,7 @@ class VTPassService {
     quantity?: number
   }): Promise<{ status: VTPassStatus; providerRef?: string; data: VTPassResponse }> {
     logger.info('VTPass cable TV purchase initiated', {
-      provider: params.provider, plan: params.variationCode
+      provider: params.provider, plan: params.variationCode,
     })
 
     const data = await this.post<VTPassResponse>('/pay', {
@@ -267,7 +355,7 @@ class VTPassService {
     quantity?: number
   }): Promise<{ status: VTPassStatus; pins?: string[]; providerRef?: string; data: VTPassResponse }> {
     logger.info('VTPass education purchase initiated', {
-      service: params.serviceId, qty: params.quantity
+      service: params.serviceId, qty: params.quantity,
     })
 
     const data = await this.post<VTPassResponse>('/pay', {
@@ -298,7 +386,9 @@ class VTPassService {
       serviceID: serviceId,
     })
     const content = res.data?.content
-    if (!content?.Customer_Name) throw new Error('Betting user ID not found')
+    if (!content?.Customer_Name) {
+      throw new AppError('Betting user ID not found. Please verify your account ID.', 400)
+    }
     return { name: content.Customer_Name }
   }
 

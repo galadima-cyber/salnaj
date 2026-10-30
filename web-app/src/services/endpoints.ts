@@ -339,6 +339,7 @@ export const airtimeCashApi = {
     airtimeAmount: number
     pin: string
   }) => api.post<{ success: boolean; message: string; data: {
+    id: string
     reference: string
     network: string
     airtimeAmount: number
@@ -354,6 +355,11 @@ export const airtimeCashApi = {
       items: AirtimeCashItem[]
       meta: { page: number; limit: number; total: number; totalPages: number }
     } }>(`/airtime-to-cash/history?page=${page}&limit=${limit}`),
+
+  confirmTransfer: (id: string) =>
+    api.post<{ success: boolean; message: string; data: { status: string; cashAmount?: number } }>(
+      `/airtime-to-cash/${id}/confirm-transfer`
+    ),
 }
 
 // ─── Referral API ─────────────────────────────────────────────
